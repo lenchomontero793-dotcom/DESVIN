@@ -1,0 +1,1 @@
+{"version": "1.6.0", "notes": "Asistente IA: chat que propone cambios de parametros (servicio, sincronizacion de APIs, mapeos, plataformas, roles) con confirmacion, auditoria y deshacer. Compatible con Claude (nube) y Ollama (local). Incluye migracion de base de datos."}

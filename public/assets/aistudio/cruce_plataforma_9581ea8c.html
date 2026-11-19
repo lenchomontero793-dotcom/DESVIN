@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}Cruce {{ platform }}{% endblock %}
+{% block page_title %}Resultado del cruce — {{ platform }}{% endblock %}
+{% block topbar_actions %}
+<a href="/plataformas/{{ platform }}/importar" class="btn btn-primary">⬆️ Nueva importación</a>
+<a href="/plataformas" class="btn">← Plataformas</a>
+{% endblock %}
+{% block content %}
+
+{% set colores = {'SAP':'#1E73BE','Salesforce':'#00A1E0','Office 365':'#D83B01','HCM':'#1E8E3E','ERP Propio':'#534AB7','Portal Clientes':'#F29900'} %}
+{% set color = colores.get(platform, '#607D8B') %}
+
+<!-- MÉTRICAS SUPERIORES -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+  <div class="metric" style="border-top:3px solid {{ color }}">
+    <div class="metric-label">Total en planilla</div>
+    <div class="metric-value" style="color:{{ color }}">{{ counts.todos }}</div>
+    <div class="metric-sub">registros importados</div>
+  </div>
+  <div class="metric" style="border-top:3px solid var(--green)">
+    <div class="metric-label">Cruzados automáticamente</div>
+    <div class="metric-value green">{{ counts.encontrado }}</div>
+    <div class="metric-sub">{% if counts.todos > 0 %}{{ (counts.encontrado/counts.todos*100)|round(1) }}% del total{% endif %}</div>
+  </div>
+  <div class="metric" style="border-top:3px solid var(--red)">
+    <div class="metric-label">Sin coincidencia</div>
+    <div class="metric-value red">{{ counts.no_encontrado }}</div>
+    <div class="metric-sub">requieren vinculación manual</div>
+  </div>
+  <div class="metric" style="border-top:3px solid var(--amber)">
+    <div class="metric-label">Cobertura</div>
+    <div class="metric-value amber">
+      {% if counts.todos > 0 %}{{ (counts.encontrado/counts.todos*100)|round(0)|int }}%{% else %}—{% endif %}
+    </div>
+    <div class="metric-sub">cruce automático</div>
+  </div>
+</div>
+
+<!-- BARRA DE PROGRESO GENERAL -->
+{% if counts.todos > 0 %}
+<div class="card" style="margin-bottom:20px;padding:16px 20px">
+  <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+    <span style="font-weight:500">Progreso del cruce con el directorio de usuarios</span>
+    <span style="color:var(--text2)">{{ counts.encontrado }} de {{ counts.todos }} usuarios encontrados</span>
+  </div>
+  <div style="height:12px;background:var(--border);border-radius:6px;overflow:hidden">
+    <div style="height:100%;width:{{ (counts.encontrado/counts.todos*100)|round(0)|int }}%;background:{{ color }};border-radius:6px;transition:.5s"></div>
+  </div>
+  <div style="display:flex;gap:20px;margin-top:10px;font-size:12px">
+    <span style="color:var(--green)">● Cruzados por email: <strong>{{ rows|selectattr('match_method','equalto','email')|list|length }}</strong></span>
+    <span style="color:#1a73e8">● Por email parcial: <strong>{{ rows|selectattr('match_method','equalto','email_parcial')|list|length }}</strong></span>
+    <span style="color:var(--amber)">● Por RUT: <strong>{{ (rows|selectattr('match_method','equalto','rut')|list|length) + (rows|selectattr('match_method','equalto','rut_cuenta')|list|length) }}</strong></span>
+    <span style="color:#795548">● Por nombre: <strong>{{ rows|selectattr('match_method','equalto','nombre')|list|length }}</strong></span>
+    <span style="color:#607D8B">● Manual: <strong>{{ rows|selectattr('match_method','equalto','manual')|list|length }}</strong></span>
+  </div>
+</div>
+{% endif %}
+
+{% if counts.no_encontrado > 0 %}
+<div class="alerts" style="margin-bottom:16px">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+  <span>
+    <strong>{{ counts.no_encontrado }} registro(s)</strong> de {{ platform }} no se cruzaron automáticamente.
+    Usa el botón <strong>"Vincular"</strong> para asignarlos manualmente al usuario correcto del directorio.
+  </span>
+  <a href="?filtro=no_encontrado" class="btn btn-sm" style="margin-left:auto;flex-shrink:0">Ver sin cruce →</a>
+</div>
+{% endif %}
+
+<!-- TABS Y BÚSQUEDA -->
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+  <div class="tabs" style="margin-bottom:0;border-bottom:none">
+    {% for f, label, cnt in [('todos','Todos',counts.todos),('encontrado','✓ Cruzados',counts.encontrado),('no_encontrado','⚠ Sin cruce',counts.no_encontrado)] %}
+    <a href="?filtro={{ f }}{% if q %}&q={{ q }}{% endif %}"
+       class="tab {% if filtro==f %}active{% endif %}" style="white-space:nowrap">
+      {{ label }} <span style="font-size:11px;opacity:.7">({{ cnt }})</span>
+    </a>
+    {% endfor %}
+  </div>
+  <form method="get" style="display:flex;gap:6px;margin-left:auto">
+    <input type="hidden" name="filtro" value="{{ filtro }}">
+    <div class="search-wrap" style="width:240px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input name="q" placeholder="Buscar en resultados..." value="{{ q }}">
+    </div>
+    <button class="btn btn-sm" type="submit">Buscar</button>
+    {% if q %}<a href="?filtro={{ filtro }}" class="btn btn-sm">✕</a>{% endif %}
+  </form>
+</div>
+
+<!-- TABLA RESULTADOS -->
+<div class="card">
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Registro en {{ platform }}</th>
+          <th>Email / ID plataforma</th>
+          <th>RUT</th>
+          <th>Estado plataforma</th>
+          <th style="text-align:center">Cruce</th>
+          <th>Usuario en directorio</th>
+          <th>Depto.</th>
+          <th>Estado dir.</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr style="{% if r.match_status == 'no_encontrado' %}background:#fff9f9{% endif %}">
+          <!-- Nombre en plataforma -->
+          <td>
+            <div style="font-weight:500;font-size:13px">{{ r.raw_name or '—' }}</div>
+            {% if r.raw_account_id %}
+            <div style="font-size:11px;color:var(--text2)">ID: {{ r.raw_account_id }}</div>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;color:var(--text2)">{{ r.raw_email or '—' }}</td>
+          <td style="font-size:12px;color:var(--text2)">{{ r.raw_rut or '—' }}</td>
+
+          <!-- Estado en plataforma -->
+          <td>
+            {% if r.raw_status and r.raw_status.lower() in ['activo','active','1','true','si','sí','enabled','habilitado','yes'] %}
+              <span class="badge badge-active">● {{ r.raw_status }}</span>
+            {% elif r.raw_status %}
+              <span class="badge badge-inactive">● {{ r.raw_status }}</span>
+            {% else %}
+              <span class="text-muted" style="font-size:12px">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Tipo de cruce -->
+          <td style="text-align:center">
+            {% if r.match_status == 'encontrado' %}
+              {% if r.match_method == 'email' %}
+                <span class="badge badge-active" title="Cruce por email exacto">📧 Email</span>
+              {% elif r.match_method == 'email_parcial' %}
+                <span class="badge" style="background:#e8f0fe;color:#1a73e8" title="Cruce por parte local del email">✉️ Email parcial</span>
+              {% elif r.match_method in ['rut','rut_cuenta'] %}
+                <span class="badge badge-pending" title="Cruce por RUT">🪪 RUT</span>
+              {% elif r.match_method == 'nombre' %}
+                <span class="badge" style="background:#fce8e6;color:#c5221f" title="Cruce por nombre">👤 Nombre</span>
+              {% elif r.match_method == 'cuenta_usuario' %}
+                <span class="badge" style="background:#e6f4ea;color:#1e7e34" title="Cruce por cuenta">🔑 Cuenta</span>
+              {% else %}
+                <span class="badge" style="background:#e8f5e9;color:#2e7d32">🖐 Manual</span>
+              {% endif %}
+            {% else %}
+              <span class="badge badge-offboarding">⚠ Sin cruce</span>
+            {% endif %}
+          </td>
+
+          <!-- Usuario en directorio -->
+          <td>
+            {% if r.matched_user_id %}
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">
+                  {{ r.user_name[:2].upper() if r.user_name else '??' }}
+                </div>
+                <div>
+                  <a href="/usuarios/{{ r.matched_user_id }}" style="font-size:13px;font-weight:500">
+                    {{ r.user_name }}
+                  </a>
+                  <div style="font-size:11px;color:var(--text2)">{{ r.user_email }}</div>
+                </div>
+              </div>
+            {% else %}
+              <span style="color:var(--text2);font-size:12px;font-style:italic">No encontrado en directorio</span>
+            {% endif %}
+          </td>
+
+          <td style="font-size:12px">{{ r.department or '—' }}</td>
+
+          <!-- Estado en directorio -->
+          <td>
+            {% if r.user_status == 'Activo' %}<span class="badge badge-active">Activo</span>
+            {% elif r.user_status == 'En proceso de baja' %}<span class="badge badge-offboarding">En baja</span>
+            {% elif r.user_status == 'Inactivo' %}<span class="badge badge-inactive">Inactivo</span>
+            {% elif r.user_status %}<span class="badge badge-pending">{{ r.user_status }}</span>
+            {% else %}<span style="font-size:12px;color:var(--text2)">—</span>{% endif %}
+          </td>
+
+          <!-- Acción -->
+          <td>
+            {% if r.match_status == 'no_encontrado' %}
+              <button class="btn btn-sm btn-primary"
+                      onclick="abrirVincular({{ r.id }}, '{{ (r.raw_name or '')|replace("'","") }}', '{{ r.raw_email or '' }}', '{{ r.raw_rut or '' }}')">
+                🔗 Vincular
+              </button>
+            {% else %}
+              <a href="/usuarios/{{ r.matched_user_id }}" class="btn btn-sm">Ver usuario</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" style="text-align:center;padding:48px;color:var(--text2)">
+            {% if counts.todos == 0 %}
+              <div style="font-size:32px;margin-bottom:12px">📂</div>
+              <div style="font-size:15px;font-weight:500;margin-bottom:8px">Aún no hay datos importados</div>
+              <a href="/plataformas/{{ platform }}/importar" class="btn btn-primary">Cargar planilla</a>
+            {% else %}
+              No hay registros en esta categoría.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if rows %}
+  <div style="padding:10px 16px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);background:var(--gray-ll)">
+    Mostrando {{ rows|length }} registro(s)
+    {% if filtro != 'todos' %} · <a href="?filtro=todos">Ver todos</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- MODAL VINCULACIÓN MANUAL -->
+<div class="modal-overlay" id="modal-vincular">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🔗 Vincular manualmente al directorio</h2>
+      <button class="btn btn-icon" onclick="document.getElementById('modal-vincular').classList.remove('open')">✕</button>
+    </div>
+    <form method="post" id="form-vincular">
+      <div class="modal-body">
+
+        <!-- Info del registro de la plataforma -->
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:14px;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase">
+            Registro en {{ platform }}
+          </div>
+          <div style="font-weight:600;font-size:14px" id="v-nombre">—</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px" id="v-email">—</div>
+          <div style="font-size:12px;color:var(--text2)" id="v-rut">—</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Buscar usuario en el directorio *</label>
+          <input type="text" id="buscar-usuario" placeholder="Escribe nombre, email o RUT..."
+                 oninput="filtrarUsuarios(this.value)" autocomplete="off">
+        </div>
+
+        <div id="lista-usuarios" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px">
+          {% for u in all_users %}
+          <div class="plat-row" style="cursor:pointer;padding:10px 12px;margin:0;border-radius:0;border-bottom:1px solid var(--border)"
+               onclick="seleccionarUsuario({{ u.id }}, '{{ u.full_name|replace("'","") }}', '{{ u.email }}')"
+               data-name="{{ u.full_name|lower }}" data-email="{{ u.email|lower }}"
+               id="urow-{{ u.id }}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">
+                {{ u.full_name[:2].upper() }}
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:500">{{ u.full_name }}</div>
+                <div style="font-size:11px;color:var(--text2)">{{ u.email }}</div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <input type="hidden" name="user_id" id="selected-user-id" required>
+        <div id="selected-user-display" style="display:none;background:var(--blue-l);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:#0c447c;margin-bottom:12px">
+          ✓ Seleccionado: <strong id="selected-user-name"></strong>
+        </div>
+
+        <div style="background:var(--amber-l);border-radius:var(--radius);padding:10px;font-size:12px;color:#5c3d00">
+          ⚠️ Al vincular, este usuario recibirá acceso a <strong>{{ platform }}</strong> en su perfil del directorio.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn"
+                onclick="document.getElementById('modal-vincular').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="btn-vincular" disabled>
+          🔗 Confirmar vinculación
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function abrirVincular(importId, nombre, email, rut) {
+  document.getElementById('form-vincular').action = `/plataformas/{{ platform }}/cruce/${importId}/vincular`;
+  document.getElementById('v-nombre').textContent = nombre || '—';
+  document.getElementById('v-email').textContent  = email  || '—';
+  document.getElementById('v-rut').textContent    = rut    || '—';
+  document.getElementById('selected-user-id').value = '';
+  document.getElementById('selected-user-display').style.display = 'none';
+  document.getElementById('btn-vincular').disabled = true;
+  document.getElementById('buscar-usuario').value  = '';
+  filtrarUsuarios('');
+  document.getElementById('modal-vincular').classList.add('open');
+  setTimeout(()=>document.getElementById('buscar-usuario').focus(), 100);
+}
+
+function filtrarUsuarios(q) {
+  const lq = q.toLowerCase().trim();
+  document.querySelectorAll('#lista-usuarios [data-name]').forEach(row => {
+    const match = !lq || row.dataset.name.includes(lq) || row.dataset.email.includes(lq);
+    row.style.display = match ? '' : 'none';
+  });
+}
+
+function seleccionarUsuario(id, nombre, email) {
+  document.getElementById('selected-user-id').value = id;
+  document.getElementById('selected-user-name').textContent = `${nombre} (${email})`;
+  document.getElementById('selected-user-display').style.display = 'block';
+  document.getElementById('btn-vincular').disabled = false;
+  // Resaltar fila seleccionada
+  document.querySelectorAll('#lista-usuarios [id^="urow-"]').forEach(r => {
+    r.style.background = '';
+    r.style.fontWeight = '';
+  });
+  const sel = document.getElementById(`urow-${id}`);
+  if (sel) { sel.style.background = 'var(--blue-l)'; }
+}
+</script>
+{% endblock %}
+{% endblock %}

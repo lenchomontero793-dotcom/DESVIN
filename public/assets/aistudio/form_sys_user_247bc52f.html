@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{% if user %}Editar usuario{% else %}Nuevo usuario del sistema{% endif %}{% endblock %}
+{% block page_title %}{% if user %}Editar: {{ user.full_name }}{% else %}Nuevo usuario del sistema{% endif %}{% endblock %}
+{% block topbar_actions %}
+<a href="/configuracion" class="btn">← Configuración</a>
+{% endblock %}
+{% block content %}
+<div style="max-width:560px">
+  <div class="card">
+    <div class="card-header">
+      <h2>{% if user %}✏️ Editar usuario{% else %}👤 Crear usuario del sistema{% endif %}</h2>
+    </div>
+    <div class="card-body">
+      <form method="post">
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label>Nombre de usuario *</label>
+            {% if user %}
+              <input type="text" value="{{ user.username }}" disabled style="background:var(--gray-l)">
+            {% else %}
+              <input type="text" name="username" required placeholder="ej: jperez"
+                     pattern="[a-z0-9_.]+" title="Solo letras minúsculas, números, puntos y guion bajo"
+                     oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_.]/g,'')">
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label>Nombre completo *</label>
+            <input type="text" name="full_name" required
+                   value="{{ user.full_name if user else '' }}" placeholder="Juan Pérez González">
+          </div>
+
+          <div class="form-group full">
+            <label>Email corporativo *</label>
+            <input type="email" name="email" required
+                   value="{{ user.email if user else '' }}" placeholder="juan.perez@empresa.com">
+          </div>
+
+          <div class="form-group">
+            <label>Rol asignado *</label>
+            <select name="role_id" required>
+              <option value="">Seleccionar rol…</option>
+              {% for r in roles %}
+              <option value="{{ r.id }}" {% if user and user.role_id==r.id %}selected{% endif %}>
+                {{ r.name }}{% if r.is_system %} (Sistema){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {% if user %}
+          <div class="form-group">
+            <label>Estado</label>
+            <select name="active" style="width:auto">
+              <option value="1" {% if user.active %}selected{% endif %}>● Activo</option>
+              <option value="0" {% if not user.active %}selected{% endif %}>● Inactivo</option>
+            </select>
+          </div>
+          {% endif %}
+
+          {% if not user %}
+          <div class="form-group full">
+            <label>Contraseña temporal</label>
+            <input type="text" name="password" placeholder="Dejar vacío para usar: Cambiar123"
+                   value="" autocomplete="off">
+            <small style="font-size:11px;color:var(--text2)">El usuario deberá cambiarla en su primer acceso si marcas la opción de abajo.</small>
+          </div>
+          {% else %}
+          <div class="form-group full">
+            <label>Nueva contraseña (opcional)</label>
+            <input type="password" name="new_password" placeholder="Dejar vacío para no cambiar" minlength="6" autocomplete="new-password">
+            <small style="font-size:11px;color:var(--text2)">Mínimo 6 caracteres. Si se deja vacío no se modifica.</small>
+          </div>
+          {% endif %}
+
+          <div class="form-group full">
+            <label class="plat-check {% if not user or user.must_change_pw %}checked{% endif %}" id="lbl-must" style="display:flex;align-items:center;gap:10px">
+              <input type="checkbox" name="must_change" value="1"
+                     {% if not user or user.must_change_pw %}checked{% endif %}
+                     onchange="document.getElementById('lbl-must').classList.toggle('checked',this.checked)">
+              <div>
+                <div style="font-weight:500;font-size:13px">Forzar cambio de contraseña al primer acceso</div>
+                <div style="font-size:11px;color:var(--text2)">El usuario verá un aviso y deberá cambiarla antes de usar el sistema</div>
+              </div>
+            </label>
+          </div>
+
+        </div>
+
+        <hr class="separator">
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <a href="/configuracion" class="btn">Cancelar</a>
+          <button type="submit" class="btn btn-primary">
+            {% if user %}💾 Guardar cambios{% else %}✚ Crear usuario{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

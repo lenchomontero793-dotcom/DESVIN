@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Plataformas{% endblock %}
+{% block page_title %}Plataformas integradas{% endblock %}
+{% block topbar_actions %}
+<a href="/plataformas/nueva" class="btn btn-primary">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Nueva plataforma
+</a>
+{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+  {% for row in data %}
+  {% set c    = row.config %}
+  {% set meta = row.meta %}
+  {% set color = meta.color %}
+  {% set abbr  = meta.abbr %}
+  {% set api   = row.api_cfg %}
+
+  <div class="card" style="position:relative">
+    <div style="height:5px;background:{{ color }};border-radius:var(--radius) var(--radius) 0 0"></div>
+    <div class="card-body">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="background:{{ color }};color:#fff;padding:6px 12px;border-radius:8px;font-weight:700;font-size:13px;min-width:48px;text-align:center">{{ abbr }}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</div>
+          <div style="font-size:12px;color:var(--text2)">{{ c.type or 'Integración' }}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+          {% if c.status=='Operativo' %}<span class="badge badge-active">● Operativo</span>
+          {% elif c.status=='Mantenimiento' %}<span class="badge badge-pending">● Mantenimiento</span>
+          {% else %}<span class="badge badge-inactive">● {{ c.status }}</span>{% endif %}
+          {% if not row.is_default %}
+          <span style="font-size:10px;background:#e8f0fe;color:#1a73e8;padding:1px 6px;border-radius:10px">Personalizada</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:600;color:{{ color }}">{{ row.user_count }}</div>
+          <div style="font-size:11px;color:var(--text2)">usuarios activos</div>
+        </div>
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:600;color:{% if row.import_matched>0 %}var(--green){% else %}var(--text2){% endif %}">{{ row.import_matched }}</div>
+          <div style="font-size:11px;color:var(--text2)">cruzados</div>
+        </div>
+      </div>
+
+      <!-- Barra cruce -->
+      {% if row.import_total > 0 %}
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
+          <span>Cobertura del cruce</span>
+          <span>{{ (row.import_matched/row.import_total*100)|round(0)|int }}%</span>
+        </div>
+        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:{{ (row.import_matched/row.import_total*100)|round(0)|int }}%;background:{{ color }};border-radius:3px"></div>
+        </div>
+        {% if row.import_unmatched > 0 %}
+        <div style="font-size:11px;color:var(--red);margin-top:2px">⚠ {{ row.import_unmatched }} sin vincular</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Estado API -->
+      {% if api %}
+      <div style="background:var(--gray-l);border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px;display:flex;align-items:center;gap:8px">
+        <span style="font-weight:600;color:var(--text2)">API:</span>
+        <span style="color:{{ color }};font-weight:500">{{ api.api_type|upper }}</span>
+        {% if api.sync_enabled %}
+          <span style="background:var(--green-l);color:var(--green);padding:1px 6px;border-radius:10px;font-size:10px;margin-left:auto">🔄 Auto</span>
+        {% else %}
+          <span style="background:var(--gray-l);color:var(--text2);padding:1px 6px;border-radius:10px;font-size:10px;margin-left:auto">Manual</span>
+        {% endif %}
+        {% if api.last_sync_status=='ok' %}
+          <span style="color:var(--green)">✓</span>
+        {% elif api.last_sync_status=='error' %}
+          <span style="color:var(--red)">✗</span>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if c.last_sync %}
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">🕐 {{ c.last_sync[:16] }}</div>
+      {% endif %}
+
+      <!-- Botones -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <!-- Fila 1: Importar planilla y API -->
+        <div style="display:flex;gap:5px">
+          <a href="/plataformas/{{ c.name }}/importar"
+             class="btn btn-sm" style="flex:1;justify-content:center;background:{{ color }};color:#fff;border-color:{{ color }}">
+            ⬆️ Planilla
+          </a>
+          <a href="/plataformas/{{ c.name }}/api"
+             class="btn btn-sm" style="flex:1;justify-content:center;{% if api %}background:var(--blue-l);color:var(--blue);border-color:var(--blue){% endif %}">
+            🔌 {% if api %}API ✓{% else %}Config. API{% endif %}
+          </a>
+        </div>
+        <!-- Fila 2: Ver cruce y Sync forzado -->
+        <div style="display:flex;gap:5px">
+          {% if row.import_total > 0 %}
+          <a href="/plataformas/{{ c.name }}/cruce" class="btn btn-sm" style="flex:1;justify-content:center">
+            🔍 Cruce ({{ row.import_total }})
+          </a>
+          {% endif %}
+          {% if api and api.last_sync_status %}
+          <form method="post" action="/plataformas/{{ c.name }}/api/sync" style="flex:1">
+            <button type="submit" class="btn btn-sm" style="width:100%;justify-content:center"
+                    onclick="return confirm('¿Sincronizar {{ c.name }} ahora?')">
+              🔄 Sync API
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        <!-- Fila 3: Editar -->
+        <a href="/plataformas/{{ c.name }}/editar" class="btn btn-sm" style="justify-content:center">
+          ✏️ Editar plataforma
+        </a>
+      </div>
+
+    </div>
+  </div>
+  {% else %}
+  <div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text2)">
+    <div style="font-size:40px;margin-bottom:12px">🖥️</div>
+    <a href="/plataformas/nueva" class="btn btn-primary">Agregar primera plataforma</a>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

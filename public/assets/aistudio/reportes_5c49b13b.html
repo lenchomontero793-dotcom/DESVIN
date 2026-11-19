@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block page_title %}Reportes{% endblock %}
+{% block content %}
+
+<div style="max-width:720px">
+  {% set reports = [
+    ('usuarios',   'Inventario completo de usuarios',      'Lista todos los usuarios con sus accesos en cada plataforma',           '👥'),
+    ('bajas',      'Reporte de bajas y desvinculaciones',  'Historial de bajas y estado de revocación de accesos',                  '🚪'),
+    ('plataformas','Accesos por plataforma',               'Distribución completa de usuarios por cada sistema integrado',           '🖥️'),
+    ('audit',      'Audit log de cambios',                 'Registro cronológico de altas, bajas y modificaciones del sistema',     '📋'),
+  ] %}
+
+  {% for tipo, titulo, desc, icon in reports %}
+  <div class="report-item">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="report-icon" style="font-size:20px">{{ icon }}</div>
+      <div class="report-info">
+        <h3>{{ titulo }}</h3>
+        <p>{{ desc }}</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <div class="dropdown">
+        <button class="btn btn-primary btn-sm" onclick="toggleDropdown('dd-{{ tipo }}')">
+          Exportar ▾
+        </button>
+        <div class="dropdown-menu" id="dd-{{ tipo }}">
+          <a href="/reportes/exportar?tipo={{ tipo }}&formato=csv">
+            📊 Descargar CSV
+          </a>
+          <a href="/reportes/exportar?tipo={{ tipo }}&formato=pdf">
+            📄 Descargar PDF
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="card mt-4">
+    <div class="card-body">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Resumen rápido</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;font-size:13px">
+        <div style="background:var(--blue-l);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:600;color:var(--blue)">{{ stats.active }}</div>
+          <div style="color:var(--text2)">Usuarios activos</div>
+        </div>
+        <div style="background:var(--red-l);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:600;color:var(--red)">{{ stats.offboarding }}</div>
+          <div style="color:var(--text2)">Bajas en proceso</div>
+        </div>
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:600;color:var(--gray)">{{ stats.inactive }}</div>
+          <div style="color:var(--text2)">Usuarios inactivos</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

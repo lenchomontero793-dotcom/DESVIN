@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Asistente IA{% endblock %}
+{% block page_title %}Asistente IA{% endblock %}
+{% block topbar_actions %}
+{% if can_service %}<a href="/configuracion/servicio?tab=asistente" class="btn">⚙️ Configurar asistente</a>{% endif %}
+<button class="btn" onclick="newChat()">🗑 Nueva conversación</button>
+{% endblock %}
+{% block content %}
+<style>
+.chat-wrap{max-width:900px;display:flex;flex-direction:column;gap:12px}
+#chat{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:340px;max-height:58vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.bubble{max-width:82%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+.bubble.user{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:3px}
+.bubble.assistant{align-self:flex-start;background:var(--gray-l);border-bottom-left-radius:3px}
+.bubble.error{align-self:flex-start;background:var(--red-l);color:#7c221e}
+.pcard{align-self:flex-start;width:88%;border:1px solid var(--border);border-left:4px solid var(--blue);border-radius:var(--radius);background:#fff;padding:12px 14px}
+.pcard.sens{border-left-color:var(--amber)} .pcard.bad{border-left-color:var(--red);background:#fffafa}
+.pcard.done{border-left-color:var(--green);background:#f6fbf7} .pcard.off{opacity:.6}
+.pcard h4{font-size:13px;margin-bottom:2px} .pcard .why{font-size:12px;color:var(--text2);margin-bottom:8px}
+.pcard table{font-size:12px;margin-bottom:8px} .pcard td,.pcard th{padding:5px 8px}
+.pcard .warn{font-size:12px;background:var(--amber-l);color:#5c3d00;border-radius:6px;padding:6px 10px;margin-bottom:6px}
+.pcard .err{font-size:12px;background:var(--red-l);color:#7c221e;border-radius:6px;padding:6px 10px;margin-bottom:6px}
+.pcard .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;border:1px solid var(--border);background:#fff;border-radius:16px;padding:5px 12px;cursor:pointer;color:var(--text2)}
+.chip:hover{background:var(--blue-l);color:var(--blue);border-color:var(--blue)}
+.composer{display:flex;gap:8px;align-items:flex-end}
+.composer textarea{flex:1;min-height:46px;max-height:140px}
+</style>
+
+<div class="chat-wrap">
+  {% if not configured %}
+  <div class="alerts">
+    <span><strong>El asistente aún no está configurado.</strong> Elige un proveedor (Claude en la nube u Ollama local) para empezar.</span>
+    {% if can_service %}<a href="/configuracion/servicio?tab=asistente" class="btn btn-sm btn-primary" style="margin-left:auto">Configurar ahora</a>
+    {% else %}<span style="margin-left:auto;font-size:12px">Pídeselo a un administrador con permiso de servicio.</span>{% endif %}
+  </div>
+  {% else %}
+  <div style="font-size:12px;color:var(--text2)">Proveedor: <strong>{{ 'Claude (Anthropic)' if provider=='anthropic' else 'Ollama (local)' }}</strong> · modelo <code>{{ model }}</code> ·
+    Solo propone cambios: <strong>nada se aplica hasta que tú lo confirmes</strong>.</div>
+  {% endif %}
+
+  <div id="chat"></div>
+
+  <div class="chips" id="chips">
+    <span class="chip" data-t="¿Cómo está configurado el servicio ahora mismo?">¿Cómo está configurado el servicio?</span>
+    <span class="chip" data-t="Cambia la duración de la sesión a 4 horas">Sesión de 4 horas</span>
+    <span class="chip" data-t="¿Qué plataformas tienen registros sin cruzar?">¿Plataformas con registros sin cruzar?</span>
+    <span class="chip" data-t="Activa la sincronización automática de las plataformas que tengan API configurada, cada 6 horas">Activar sincronización cada 6 h</span>
+    <span class="chip" data-t="Crea un rol Auditor que solo pueda ver reportes y el audit log">Crear rol Auditor</span>
+  </div>
+
+  <div class="composer">
+    <textarea id="msg" placeholder="Escribe qué quieres revisar o cambiar… (Enter para enviar, Shift+Enter para salto de línea)" {% if not configured %}disabled{% endif %}></textarea>
+    <button class="btn btn-primary" id="send" onclick="send()" {% if not configured %}disabled{% endif %}>Enviar</button>
+  </div>
+
+  {% if recent %}
+  <div class="card" style="margin-top:8px">
+    <div class="card-header"><h2>🕘 Cambios recientes hechos con el asistente</h2></div>
+    <table>
+      <thead><tr><th>Fecha</th><th>Cambio</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td style="font-size:12px;white-space:nowrap">{{ r.applied_at[:16] if r.applied_at else '' }}</td>
+          <td style="font-size:12px"><strong>{{ r.title }}</strong><br><span class="text-muted">{% for c in r.changes %}{{ c.label }}: {{ c.current }} → {{ c.new }}{% if not loop.last %} · {% endif %}{% endfor %}</span></td>
+          <td>{% if r.status=='aplicada' %}<span class="badge badge-active">Aplicado</span>{% else %}<span class="badge badge-inactive">Deshecho</span>{% endif %}</td>
+          <td>{% if r.undoable %}<button class="btn btn-sm" onclick="undoRecent('{{ r.id }}', this)">↩️ Deshacer</button>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = "{{ csrf_token() }}";
+const CAN_SERVICE = {{ 'true' if can_service else 'false' }};
+let history = [];
+const chat = document.getElementById('chat'), box = document.getElementById('msg'), sendBtn = document.getElementById('send');
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+function scroll() { chat.scrollTop = chat.scrollHeight; }
+function bubble(role, text) { const b = el('div', 'bubble ' + role, text); chat.appendChild(b); scroll(); return b; }
+
+async function api(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF}, body: JSON.stringify(body || {})});
+  let j = null; try { j = await r.json(); } catch (e) {}
+  if (!j) throw new Error('Respuesta inesperada del servidor (HTTP ' + r.status + '). Recarga la página.');
+  return j;
+}
+
+function newChat() { history = []; chat.innerHTML = ''; greet(); document.getElementById('chips').style.display = ''; }
+function greet() {
+  bubble('assistant', 'Hola, soy el asistente de configuración de UserSync. Puedo revisar el estado de tu instalación y proponerte cambios de parámetros (servicio, sincronización de APIs, mapeos de campos, plataformas y roles). Tú confirmas cada cambio y siempre se puede deshacer.');
+}
+
+function proposalCard(p) {
+  const card = el('div', 'pcard' + (p.errors && p.errors.length ? ' bad' : p.sensitive ? ' sens' : ''));
+  card.appendChild(el('h4', '', (p.sensitive ? '⚠️ ' : '') + p.title));
+  if (p.reason) card.appendChild(el('div', 'why', p.reason));
+  if (p.changes && p.changes.length) {
+    const t = el('table'); const hd = el('tr'); ['Parámetro', 'Ahora', 'Propuesto'].forEach(h => hd.appendChild(el('th', '', h))); t.appendChild(hd);
+    p.changes.forEach(c => { const r = el('tr'); r.appendChild(el('td', '', c.label)); r.appendChild(el('td', '', c.current)); const n = el('td', '', c.new); n.style.fontWeight = '600'; r.appendChild(n); t.appendChild(r); });
+    card.appendChild(t);
+  }
+  (p.warnings || []).forEach(w => card.appendChild(el('div', 'warn', '⚠️ ' + w)));
+  (p.errors || []).forEach(w => card.appendChild(el('div', 'err', '✗ ' + w)));
+  const acts = el('div', 'acts'); card.appendChild(acts);
+  if (p.can_apply) {
+    const ok = el('button', 'btn btn-primary btn-sm', '✓ Aplicar'); const no = el('button', 'btn btn-sm', 'Descartar');
+    ok.onclick = async () => {
+      ok.disabled = no.disabled = true; ok.textContent = '⏳ Aplicando…';
+      try {
+        const j = await api('/asistente/propuesta/' + p.id + '/aplicar');
+        acts.innerHTML = '';
+        if (j.ok) {
+          card.classList.add('done'); acts.appendChild(el('span', '', '✓ ' + j.message));
+          if (j.undoable) { const u = el('button', 'btn btn-sm', '↩️ Deshacer'); u.onclick = () => undo(p.id, card, acts, u); acts.appendChild(u); }
+          if (j.restart) { const note = el('div', 'warn', 'Para activar este cambio hay que reiniciar el servicio.'); card.insertBefore(note, acts);
+            if (CAN_SERVICE) { const a = el('a', 'btn btn-sm', 'Ir a Servicio para reiniciar'); a.href = '/configuracion/servicio?tab=parametros'; acts.appendChild(a); } }
+        } else { card.classList.add('bad'); card.insertBefore(el('div', 'err', '✗ ' + j.error), acts); ok.disabled = no.disabled = false; ok.textContent = '✓ Aplicar'; acts.appendChild(ok); acts.appendChild(no); }
+      } catch (e) { card.insertBefore(el('div', 'err', '✗ ' + e.message), acts); ok.disabled = no.disabled = false; ok.textContent = '✓ Aplicar'; }
+    };
+    no.onclick = async () => { try { await api('/asistente/propuesta/' + p.id + '/descartar'); } catch (e) {} card.classList.add('off'); acts.innerHTML = ''; acts.appendChild(el('span', 'text-muted', 'Descartada')); };
+    acts.appendChild(ok); acts.appendChild(no);
+  }
+  return card;
+}
+
+async function undo(id, card, acts, btn) {
+  btn.disabled = true;
+  try {
+    const j = await api('/asistente/propuesta/' + id + '/deshacer');
+    acts.innerHTML = ''; card.classList.remove('done'); card.classList.add('off');
+    acts.appendChild(el('span', j.ok ? 'text-muted' : '', j.ok ? '↩️ ' + j.message : '✗ ' + j.error));
+  } catch (e) { btn.disabled = false; }
+}
+async function undoRecent(id, btn) {
+  if (!confirm('¿Deshacer este cambio y volver al valor anterior?')) return;
+  btn.disabled = true;
+  try { const j = await api('/asistente/propuesta/' + id + '/deshacer'); if (j.ok) location.reload(); else { alert(j.error); btn.disabled = false; } }
+  catch (e) { alert(e.message); btn.disabled = false; }
+}
+
+async function send(text) {
+  text = (text || box.value).trim(); if (!text) return;
+  box.value = ''; document.getElementById('chips').style.display = 'none';
+  bubble('user', text); history.push({role: 'user', content: text});
+  sendBtn.disabled = true; box.disabled = true;
+  const thinking = bubble('assistant', '⏳ Pensando…');
+  try {
+    const j = await api('/asistente/mensaje', {messages: history});
+    thinking.remove();
+    if (!j.ok) { history.pop(); bubble('error', j.error || 'No se pudo obtener respuesta.'); }
+    else {
+      if (j.reply) bubble('assistant', j.reply);
+      history.push({role: 'assistant', content: j.assistant_turn || j.reply || ''});
+      (j.proposals || []).forEach(p => { chat.appendChild(proposalCard(p)); });
+      scroll();
+    }
+  } catch (e) { thinking.remove(); history.pop(); bubble('error', e.message); }
+  sendBtn.disabled = false; box.disabled = false; box.focus();
+}
+
+box.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => send(c.dataset.t));
+greet();
+</script>
+{% endblock %}

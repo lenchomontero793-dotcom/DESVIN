@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}Servicio y actualizaciones{% endblock %}
+{% block page_title %}Servicio y actualizaciones{% endblock %}
+{% block topbar_actions %}
+<a href="/configuracion" class="btn">← Configuración</a>
+{% endblock %}
+{% block content %}
+
+{% if pending %}
+<div class="alerts" style="margin-bottom:12px">
+  <span>🔄 <strong>Hay cambios pendientes de reinicio.</strong> El servicio sigue funcionando con la configuración/versión anterior hasta que lo reinicies.</span>
+  <form method="post" action="/configuracion/servicio/reiniciar" style="margin-left:auto;flex-shrink:0"
+        onsubmit="return confirm('El servicio se reiniciará (30–60 segundos). Los usuarios conectados verán una breve interrupción. ¿Continuar?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn btn-primary btn-sm" type="submit">Reiniciar ahora</button>
+  </form>
+</div>
+{% endif %}
+{% if runtime.port and runtime.port != cfg.port %}
+<div class="alerts danger" style="margin-bottom:12px">
+  ⚠️ El servicio está escuchando en el puerto <strong>{{ runtime.port }}</strong> pero la configuración indica <strong>{{ cfg.port }}</strong>
+  (el puerto configurado estaba ocupado al iniciar).
+</div>
+{% endif %}
+
+<div class="tabs" id="svc-tabs">
+  <div class="tab" data-tab="parametros" onclick="showSvc('parametros')">⚙️ Parámetros</div>
+  <div class="tab" data-tab="actualizar"  onclick="showSvc('actualizar')">⬆️ Actualizar versión</div>
+  <div class="tab" data-tab="respaldos"   onclick="showSvc('respaldos')">💾 Respaldos ({{ backups|length }})</div>
+  <div class="tab" data-tab="asistente"   onclick="showSvc('asistente')">🤖 Asistente IA</div>
+  <div class="tab" data-tab="info"        onclick="showSvc('info')">ℹ️ Información</div>
+</div>
+
+<!-- ══ PARÁMETROS ══════════════════════════════════════════════════════════ -->
+<div id="svc-parametros" class="svc-pane" style="max-width:720px">
+  <form method="post" action="/configuracion/servicio/guardar">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🏢 General</h2><span class="badge badge-active">Se aplica al guardar</span></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group full"><label>Nombre de la organización</label>
+            <input type="text" name="org_name" maxlength="80" value="{{ cfg.org_name }}"></div>
+          <div class="form-group"><label>Email de notificación de inconsistencias</label>
+            <input type="email" name="notify_email" value="{{ cfg.notify_email }}"></div>
+          <div class="form-group"><label>Días de gracia para revocar accesos tras una baja</label>
+            <input type="number" name="grace_days" min="0" max="90" value="{{ cfg.grace_days }}"></div>
+          <div class="form-group"><label>Duración de la sesión (horas)</label>
+            <input type="number" name="session_hours" min="1" max="168" value="{{ cfg.session_hours }}"></div>
+          <div class="form-group"><label>Revisión de sincronizaciones API (cada N min)</label>
+            <input type="number" name="scheduler_check_minutes" min="1" max="60" value="{{ cfg.scheduler_check_minutes }}"></div>
+          <div class="form-group"><label>Respaldos a conservar</label>
+            <input type="number" name="backup_retention" min="3" max="100" value="{{ cfg.backup_retention }}">
+            <small style="font-size:11px;color:var(--text2)">Los más antiguos se eliminan automáticamente.</small></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🌐 Servidor</h2><span class="badge badge-pending">Requiere reinicio</span></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group"><label>Acceso al servicio</label>
+            <select name="host">
+              <option value="127.0.0.1" {% if cfg.host=='127.0.0.1' %}selected{% endif %}>Solo desde este equipo (127.0.0.1)</option>
+              <option value="0.0.0.0"   {% if cfg.host=='0.0.0.0' %}selected{% endif %}>Desde toda la red (0.0.0.0)</option>
+            </select></div>
+          <div class="form-group"><label>Puerto</label>
+            <input type="number" name="port" min="1" max="65535" value="{{ cfg.port }}"></div>
+          <div class="form-group full">
+            <label class="plat-check {% if cfg.open_browser %}checked{% endif %}" style="display:flex;align-items:center;gap:10px">
+              <input type="checkbox" name="open_browser" value="1" {% if cfg.open_browser %}checked{% endif %}
+                     onchange="this.closest('label').classList.toggle('checked',this.checked)">
+              <div><div style="font-weight:500;font-size:13px">Abrir el navegador al iniciar el servicio</div>
+              <div style="font-size:11px;color:var(--text2)">Desactívalo si UserSync corre en un servidor sin pantalla.</div></div>
+            </label></div>
+        </div>
+        <div style="background:var(--amber-l);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:#5c3d00;margin-top:12px">
+          ⚠️ Al elegir <strong>"toda la red"</strong> otros equipos podrán abrir UserSync por HTTP sin cifrar. Hazlo solo en una red interna de confianza y
+          permite el puerto en el Firewall de Windows. Si el nuevo puerto está ocupado, el sistema no te deja guardarlo.
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end"><button type="submit" class="btn btn-primary">💾 Guardar configuración</button></div>
+  </form>
+</div>
+
+<!-- ══ ACTUALIZAR ══════════════════════════════════════════════════════════ -->
+<div id="svc-actualizar" class="svc-pane" style="display:none;max-width:860px">
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h2>⬆️ Cargar una mejora</h2><span class="badge badge-active">Versión instalada: v{{ info.version }}</span></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;font-size:12px">
+        <div style="background:var(--green-l);border-radius:var(--radius);padding:10px"><strong>🔒 Tus datos no se tocan.</strong><br>Usuarios, plataformas, roles y configuración viven en la carpeta <code>data/</code>, fuera del código.</div>
+        <div style="background:var(--blue-l);border-radius:var(--radius);padding:10px"><strong>🧪 Se prueba antes de aplicar.</strong><br>El paquete se ejecuta aparte sobre una <em>copia</em> de tu base de datos. Si falla, no se instala.</div>
+        <div style="background:var(--amber-l);border-radius:var(--radius);padding:10px"><strong>↩️ Siempre hay marcha atrás.</strong><br>Antes de aplicar se crea un respaldo (datos + código) que puedes restaurar en la pestaña Respaldos.</div>
+      </div>
+      <form method="post" action="/configuracion/servicio/actualizar/validar" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="form-grid">
+          <div class="form-group"><label>Paquete de actualización (.zip)</label>
+            <input type="file" name="paquete" accept=".zip" required></div>
+          <div class="form-group"><label>SHA-256 del paquete <small style="font-weight:400">(opcional)</small></label>
+            <input type="text" name="sha256" placeholder="Pega aquí el código de verificación si te lo entregaron" autocomplete="off"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button type="submit" class="btn btn-primary" onclick="this.textContent='⏳ Validando y probando…'">🔍 Validar paquete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if staged %}
+  <div class="card" style="margin-bottom:16px;border:2px solid {% if staged.can_apply %}var(--green){% else %}var(--red){% endif %}">
+    <div class="card-header">
+      <h2>📦 Revisión del paquete: {{ staged.filename }}</h2>
+      {% if staged.can_apply %}<span class="badge badge-active">✓ Listo para aplicar</span>{% else %}<span class="badge badge-offboarding">✗ No se puede aplicar</span>{% endif %}
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text2)">Versión actual</div><div style="font-size:18px;font-weight:600">{{ staged.current_version }}</div></div>
+        <div style="background:var(--blue-l);border-radius:var(--radius);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text2)">Versión nueva</div><div style="font-size:18px;font-weight:600;color:var(--blue)">{{ staged.new_version }}</div></div>
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text2)">Archivos a cambiar</div><div style="font-size:18px;font-weight:600">{{ staged.changed_count }}</div></div>
+        <div style="background:{% if staged.selftest_ok %}var(--green-l){% else %}var(--red-l){% endif %};border-radius:var(--radius);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text2)">Autoprueba</div><div style="font-size:18px;font-weight:600;color:{% if staged.selftest_ok %}var(--green){% else %}var(--red){% endif %}">{% if staged.selftest_ok %}✓ Superada{% else %}✗ Falló{% endif %}</div></div>
+      </div>
+
+      {% if staged.notes %}<div style="background:var(--gray-l);border-radius:var(--radius);padding:10px 12px;font-size:13px;margin-bottom:12px"><strong>Qué incluye:</strong> {{ staged.notes }}</div>{% endif %}
+      {% for w in staged.warnings %}<div class="alert-msg warning" style="margin-bottom:8px">⚠️ {{ w }}</div>{% endfor %}
+
+      <table style="margin-bottom:12px">
+        <thead><tr><th>Archivo</th><th style="width:120px">Cambio</th></tr></thead>
+        <tbody>
+          {% for f in staged.files %}
+          <tr><td><code style="font-size:12px">{{ f.path }}</code></td>
+            <td>{% if f.status=='nuevo' %}<span class="badge badge-active">+ nuevo</span>{% elif f.status=='modificado' %}<span class="badge badge-pending">~ modificado</span>{% else %}<span class="badge badge-inactive">sin cambios</span>{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if staged.skipped %}<details style="font-size:12px;color:var(--text2);margin-bottom:10px"><summary>{{ staged.skipped|length }} archivo(s) ignorados por seguridad</summary><ul style="margin:6px 0 0 18px">{% for s in staged.skipped %}<li>{{ s }}</li>{% endfor %}</ul></details>{% endif %}
+      <details {% if not staged.selftest_ok %}open{% endif %} style="font-size:12px;margin-bottom:14px"><summary style="cursor:pointer;color:var(--text2)">Resultado de la autoprueba</summary>
+        <pre style="background:#1f2937;color:#e5e7eb;padding:10px;border-radius:6px;white-space:pre-wrap;margin-top:6px;max-height:220px;overflow:auto">{{ staged.selftest_output }}</pre></details>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">SHA-256 del archivo: <code>{{ staged.sha256 }}</code> · {{ staged.size }}</div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <form method="post" action="/configuracion/servicio/actualizar/cancelar">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="stage_id" value="{{ staged.stage_id }}">
+          <button class="btn" type="submit">Cancelar</button></form>
+        {% if staged.can_apply %}
+        <form method="post" action="/configuracion/servicio/actualizar/aplicar"
+              onsubmit="return confirm('Se creará un respaldo y se aplicarán {{ staged.changed_count }} archivo(s). Tus datos no se modifican. ¿Continuar?')">
+          <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="stage_id" value="{{ staged.stage_id }}">
+          <button class="btn btn-primary" type="submit">✓ Aplicar actualización</button></form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header"><h2>🕘 Historial de versiones</h2></div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Versión</th><th>Archivos</th><th>Respaldo previo</th><th>Por</th></tr></thead>
+      <tbody>
+        {% for h in history %}
+        <tr><td style="font-size:12px;white-space:nowrap">{{ h.created_at[:16] }}</td>
+          <td><span class="badge {% if h.kind=='actualización' %}badge-active{% else %}badge-pending{% endif %}">{{ h.kind }}</span></td>
+          <td>{{ h.from_version or '—' }}{% if h.to_version %} → <strong>{{ h.to_version }}</strong>{% endif %}</td>
+          <td style="text-align:center">{{ h.files_count }}</td>
+          <td style="font-size:11px" class="text-muted">{{ h.backup_name or '—' }}</td>
+          <td style="font-size:12px">{{ h.applied_by or '—' }}</td></tr>
+        {% else %}<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text2)">Aún no se han aplicado actualizaciones.</td></tr>{% endfor %}
+      </tbody></table></div>
+  </div>
+</div>
+
+<!-- ══ RESPALDOS ═══════════════════════════════════════════════════════════ -->
+<div id="svc-respaldos" class="svc-pane" style="display:none">
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body">
+      <form method="post" action="/configuracion/servicio/respaldo/crear" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="text" name="note" maxlength="120" placeholder="Nota opcional (ej: antes de la carga masiva de marzo)" style="flex:1;min-width:260px">
+        <button type="submit" class="btn btn-primary">💾 Crear respaldo ahora</button>
+      </form>
+      <div style="font-size:12px;color:var(--text2);margin-top:8px">Cada respaldo contiene la base de datos completa y el código instalado. Se crean automáticamente antes de actualizar, de restaurar y de migrar el esquema.</div>
+    </div>
+  </div>
+  <div class="card"><div style="overflow-x:auto"><table>
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Versión</th><th>Tamaño</th><th>Nota</th><th>Acciones</th></tr></thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td style="font-size:12px;white-space:nowrap">{{ b.created[:16] }}</td>
+        <td><span class="badge badge-inactive">{{ b.kind }}</span></td>
+        <td>{{ b.version }}</td><td style="font-size:12px">{{ b.size }}</td>
+        <td style="font-size:12px;max-width:220px" class="text-muted">{{ b.note or '—' }}</td>
+        <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+          <a class="btn btn-sm" href="/configuracion/servicio/respaldo/{{ b.name }}/descargar">⬇️</a>
+          {% for what, label, msg in [('db','Restaurar datos','Se reemplazarán TODOS los datos actuales por los de este respaldo (se guarda antes un respaldo de seguridad).'),('code','Restaurar código','Se volverá al código de este respaldo; los datos actuales se conservan. Requiere reiniciar.'),('all','Restaurar todo','Se restaurarán datos y código de este respaldo (se guarda antes un respaldo de seguridad).')] %}
+          <form method="post" action="/configuracion/servicio/respaldo/{{ b.name }}/restaurar" onsubmit="return confirm('{{ msg }} ¿Continuar?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="what" value="{{ what }}">
+            <button class="btn btn-sm" type="submit" {% if what=='db' %}style="color:var(--red)"{% endif %}>{{ label }}</button></form>
+          {% endfor %}
+          <form method="post" action="/configuracion/servicio/respaldo/{{ b.name }}/eliminar" onsubmit="return confirm('¿Eliminar este respaldo?')">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn btn-sm" style="color:var(--red)" type="submit">🗑</button></form>
+        </div></td>
+      </tr>
+      {% else %}<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text2)">Aún no hay respaldos.</td></tr>{% endfor %}
+    </tbody></table></div></div>
+</div>
+
+<!-- ══ ASISTENTE IA ════════════════════════════════════════════════════════ -->
+<div id="svc-asistente" class="svc-pane" style="display:none;max-width:760px">
+  <form method="post" action="/configuracion/servicio/asistente/guardar">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🤖 Asistente de IA</h2>
+        {% if cfg.ai_provider == 'none' %}<span class="badge badge-inactive">Desactivado</span>
+        {% elif cfg.ai_provider == 'anthropic' and not ai_key_set %}<span class="badge badge-pending">Falta la API key</span>
+        {% else %}<span class="badge badge-active">Activo</span>{% endif %}
+      </div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Un chat que te ayuda a revisar y cambiar parámetros (servicio, sincronización de APIs, mapeos, plataformas, roles). <strong>Solo propone: tú confirmas cada cambio</strong> y puedes deshacerlo. Se usa desde <em>Asistente IA</em> en el menú lateral.</p>
+        <div class="form-grid">
+          <div class="form-group full"><label>Proveedor</label>
+            <select name="ai_provider" id="ai_provider" onchange="aiToggle()">
+              <option value="none" {% if cfg.ai_provider=='none' %}selected{% endif %}>Desactivado</option>
+              <option value="anthropic" {% if cfg.ai_provider=='anthropic' %}selected{% endif %}>Claude (Anthropic) — en la nube</option>
+              <option value="ollama" {% if cfg.ai_provider=='ollama' %}selected{% endif %}>Modelo local con Ollama — sin internet, todo en tu equipo</option>
+            </select></div>
+        </div>
+        <div id="ai-anthropic" style="display:none">
+          <div class="form-grid">
+            <div class="form-group"><label>Modelo</label>
+              <input type="text" name="ai_model" id="ai_model" list="ai_models" value="{{ cfg.ai_model }}">
+              <datalist id="ai_models"><option value="claude-sonnet-5-5"><option value="claude-haiku-5-5"><option value="claude-opus-5-5"></datalist></div>
+            <div class="form-group"><label>API key</label>
+              <input type="password" name="ai_api_key" id="ai_api_key" autocomplete="new-password"
+                     placeholder="{% if ai_key_set %}•••••••• (guardada; déjalo vacío para conservarla){% else %}sk-ant-…{% endif %}">
+              {% if ai_key_env %}<small style="font-size:11px;color:var(--text2)">Se está usando la variable de entorno ANTHROPIC_API_KEY.</small>{% endif %}</div>
+            <div class="form-group full"><label style="display:flex;align-items:center;gap:8px;font-weight:400"><input type="checkbox" name="ai_clear_key" value="1"> Borrar la API key guardada</label></div>
+          </div>
+          <div style="background:var(--blue-l);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:#0c447c;margin-bottom:12px">
+            La API key se crea en la consola de Anthropic (<code>console.anthropic.com</code> → Settings). Es <strong>distinta de una suscripción a Claude.ai</strong> y se factura aparte, por uso. Se guarda solo en <code>data/config.json</code> de este equipo; nunca se muestra de nuevo ni se incluye en los respaldos.</div>
+        </div>
+        <div id="ai-ollama" style="display:none">
+          <div class="form-grid">
+            <div class="form-group"><label>URL de Ollama</label><input type="text" name="ai_ollama_url" id="ai_ollama_url" value="{{ cfg.ai_ollama_url }}"></div>
+            <div class="form-group"><label>Modelo</label><input type="text" name="ai_ollama_model" id="ai_ollama_model" value="{{ cfg.ai_ollama_model }}"></div>
+          </div>
+          <div style="background:var(--blue-l);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:#0c447c;margin-bottom:12px">
+            Instala Ollama (<code>ollama.com</code>) y descarga un modelo, por ejemplo <code>ollama pull llama3.1</code>. Los modelos pequeños a veces no siguen bien el formato de propuestas; si ves respuestas sin cambios aplicables, prueba un modelo más grande.</div>
+        </div>
+        <div id="ai-test-result" style="display:none;margin-bottom:12px"></div>
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:12px;font-size:12px;color:var(--text2)">
+          <strong>🔒 Qué se envía al proveedor:</strong> solo parámetros del sistema (configuración del servicio, nombre/tipo/estado de las plataformas, mapeos de campos, roles y permisos, y conteos agregados del cruce) más tu conversación.<br>
+          <strong>Nunca se envía:</strong> usuarios, RUT, correos, contraseñas, tokens, URLs de API ni claves. Con Ollama nada sale de tu red.<br>
+          <strong>Qué no puede hacer:</strong> modificar código, credenciales ni URLs, ver datos de personas, borrar plataformas o roles, ni reiniciar el servicio.
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button type="button" class="btn" id="ai-test-btn" onclick="aiTest()">🔌 Probar conexión</button>
+      <button type="submit" class="btn btn-primary">💾 Guardar</button>
+    </div>
+  </form>
+</div>
+
+<!-- ══ INFORMACIÓN ═════════════════════════════════════════════════════════ -->
+<div id="svc-info" class="svc-pane" style="display:none;max-width:560px">
+  <div class="card"><div class="card-body" style="font-size:13px">
+    <div class="detail-row"><span>Versión de UserSync</span><span><strong>v{{ info.version }}</strong></span></div>
+    <div class="detail-row"><span>Versión del esquema de datos</span><span>{{ info.schema or '—' }}</span></div>
+    <div class="detail-row"><span>Servidor</span><span>{{ runtime.server }} · {{ runtime.host }}:{{ runtime.port }}</span></div>
+    <div class="detail-row"><span>En funcionamiento hace</span><span>{{ info.uptime }}</span></div>
+    <div class="detail-row"><span>Reinicio automático (launcher)</span><span>{% if info.supervised %}✓ Activo{% else %}No (inicio manual){% endif %}</span></div>
+    <div class="detail-row"><span>Carpeta de datos</span><span><code style="font-size:11px">{{ info.data_dir }}</code></span></div>
+    <div class="detail-row"><span>Tamaño de la base de datos</span><span>{{ info.db_size }}</span></div>
+    <div class="detail-row"><span>Respaldos almacenados</span><span>{{ info.backups }}</span></div>
+    <div class="detail-row"><span>Python</span><span>{{ info.python }} · {{ info.os }}</span></div>
+  </div></div>
+  <form method="post" action="/configuracion/servicio/reiniciar" style="margin-top:14px"
+        onsubmit="return confirm('El servicio se reiniciará (30–60 segundos). ¿Continuar?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn" type="submit">🔄 Reiniciar servicio</button>
+  </form>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function showSvc(id) {
+  document.querySelectorAll('.svc-pane').forEach(p => p.style.display = (p.id === 'svc-' + id) ? '' : 'none');
+  document.querySelectorAll('#svc-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+}
+function aiToggle() {
+  const p = document.getElementById('ai_provider').value;
+  document.getElementById('ai-anthropic').style.display = p === 'anthropic' ? '' : 'none';
+  document.getElementById('ai-ollama').style.display    = p === 'ollama' ? '' : 'none';
+}
+async function aiTest() {
+  const btn = document.getElementById('ai-test-btn'), out = document.getElementById('ai-test-result');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Probando…'; out.style.display = 'none';
+  try {
+    const r = await fetch('/configuracion/servicio/asistente/probar', {method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':'{{ csrf_token() }}'},
+      body: JSON.stringify({provider: document.getElementById('ai_provider').value, model: document.getElementById('ai_model').value,
+        key: document.getElementById('ai_api_key').value, ollama_url: document.getElementById('ai_ollama_url').value,
+        ollama_model: document.getElementById('ai_ollama_model').value})});
+    const j = await r.json();
+    out.innerHTML = ''; const d = document.createElement('div'); d.className = 'alert-msg ' + (j.ok ? 'success' : 'danger');
+    d.textContent = (j.ok ? '✓ ' : '✗ ') + (j.msg || j.error || 'Sin respuesta'); out.appendChild(d); out.style.display = '';
+  } catch (e) {
+    out.innerHTML = '<div class="alert-msg danger">✗ No se pudo completar la prueba.</div>'; out.style.display = '';
+  }
+  btn.disabled = false; btn.textContent = old;
+}
+aiToggle();
+showSvc('{{ tab }}');
+</script>
+{% endblock %}

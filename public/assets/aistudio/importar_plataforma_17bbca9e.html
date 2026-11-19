@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Importar {{ platform }}{% endblock %}
+{% block page_title %}Importar usuarios — {{ platform }}{% endblock %}
+{% block topbar_actions %}
+<a href="/plataformas/{{ platform }}/plantilla" class="btn">⬇️ Descargar plantilla</a>
+<a href="/plataformas" class="btn">← Plataformas</a>
+{% endblock %}
+{% block content %}
+
+{% set colores = {'SAP':'#1E73BE','Salesforce':'#00A1E0','Office 365':'#D83B01','HCM':'#1E8E3E','ERP Propio':'#534AB7','Portal Clientes':'#F29900'} %}
+{% set color = extra.color if extra and extra.color else colores.get(platform, '#607D8B') %}
+
+<div style="max-width:720px">
+
+  <!-- ESTADO IMPORTACIONES PREVIAS -->
+  {% if total > 0 %}
+  <div class="card" style="margin-bottom:20px;border-left:4px solid {{ color }}">
+    <div class="card-header">
+      <h2>📊 Resultado de la última importación</h2>
+      <a href="/plataformas/{{ platform }}/cruce" class="btn btn-sm btn-primary">Ver cruce completo →</a>
+    </div>
+    <div class="card-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div style="text-align:center;padding:16px;background:var(--gray-l);border-radius:var(--radius)">
+        <div style="font-size:28px;font-weight:700;color:{{ color }}">{{ total }}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Registros en planilla</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:var(--green-l);border-radius:var(--radius)">
+        <div style="font-size:28px;font-weight:700;color:var(--green)">{{ matched }}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">✓ Cruzados automáticamente</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:{% if unmatched > 0 %}var(--red-l){% else %}var(--green-l){% endif %};border-radius:var(--radius)">
+        <div style="font-size:28px;font-weight:700;color:{% if unmatched > 0 %}var(--red){% else %}var(--green){% endif %}">{{ unmatched }}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">{% if unmatched > 0 %}⚠ Sin coincidencia{% else %}✓ Sin pendientes{% endif %}</div>
+      </div>
+    </div>
+    {% if total > 0 %}
+    <div style="padding:10px 20px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px">
+        <span>Cobertura del cruce automático</span>
+        <span><strong>{{ matched }}/{{ total }}</strong> ({{ (matched/total*100)|round(1) }}%)</span>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:{{ (matched/total*100)|round(0)|int }}%;background:{{ color }};border-radius:4px;transition:.5s"></div>
+      </div>
+    </div>
+    {% endif %}
+    {% if last_import %}
+    <div style="padding:8px 20px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">
+      🕐 Última carga: {{ last_import }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- CÓMO FUNCIONA EL CRUCE -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:{{ color }};color:#fff;padding:4px 12px;border-radius:6px;font-weight:700;font-size:13px">
+          {{ extra.abbr if extra and extra.abbr else platform[:4] }}
+        </span>
+        <h2>¿Cómo funciona el cruce con el directorio?</h2>
+      </div>
+    </div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+        Al cargar la planilla de <strong>{{ platform }}</strong>, el sistema cruza automáticamente
+        cada fila con los usuarios del directorio principal siguiendo este orden de prioridad:
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        {% for n, title, desc, icon in [
+          ('1','Email exacto','Si el email del archivo coincide con el email del usuario en el directorio','📧'),
+          ('2','Email parcial','Compara la parte local del email (ej: "agarcia" con "a.garcia@empresa.com")','✉️'),
+          ('3','RUT','Normaliza y compara RUT (con o sin puntos y guiones)','🪪'),
+          ('4','Nombre completo','Compara nombre con variantes y normalización de tildes','👤'),
+        ] %}
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:12px;position:relative">
+          <div style="position:absolute;top:8px;right:10px;font-size:18px">{{ icon }}</div>
+          <div style="font-size:10px;font-weight:700;color:{{ color }};margin-bottom:4px;text-transform:uppercase">Nivel {{ n }}</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">{{ title }}</div>
+          <div style="font-size:11px;color:var(--text2)">{{ desc }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="background:var(--blue-l);border-radius:var(--radius);padding:12px;font-size:12px;color:#0c447c">
+        💡 Los registros que no se crucen automáticamente quedarán en la pestaña <strong>"Sin coincidencia"</strong>
+        del cruce, donde podrás vincularlos manualmente al usuario correcto del directorio.
+      </div>
+    </div>
+  </div>
+
+  <!-- INSTRUCCIONES DE EXPORTACIÓN -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><h2>📤 ¿Cómo exportar desde {{ platform }}?</h2></div>
+    <div class="card-body">
+      {% if platform == "SAP" %}
+      <ol style="font-size:13px;line-height:2.2;padding-left:20px;color:var(--text2)">
+        <li>Ejecuta la transacción <strong>SU01</strong> o el reporte <strong>RSUSR002</strong></li>
+        <li>Filtra los usuarios activos de tu mandante</li>
+        <li>Exporta con <strong>Ctrl+Shift+F7</strong> → Guardar → Hoja de cálculo</li>
+        <li>Columnas clave para el cruce: <code>nombre</code>, <code>email</code> o <code>rut</code></li>
+      </ol>
+      {% elif platform == "Salesforce" %}
+      <ol style="font-size:13px;line-height:2.2;padding-left:20px;color:var(--text2)">
+        <li>Ve a <strong>Configuración → Usuarios → Usuarios</strong></li>
+        <li>Clic en <strong>"Exportar a Excel"</strong> en la lista</li>
+        <li>O crea un Informe de Usuarios con: Nombre, Email, Perfil, Estado</li>
+        <li>El campo <strong>email</strong> es el más preciso para el cruce</li>
+      </ol>
+      {% elif platform == "Office 365" %}
+      <ol style="font-size:13px;line-height:2.2;padding-left:20px;color:var(--text2)">
+        <li>Accede al <strong>Centro de administración de Microsoft 365</strong></li>
+        <li>Ve a <strong>Usuarios → Usuarios activos</strong></li>
+        <li>Clic en <strong>"Exportar usuarios"</strong> (arriba a la derecha)</li>
+        <li>El CSV incluye <code>Display name</code> y <code>User principal name</code> (email)</li>
+      </ol>
+      {% elif platform == "HCM" %}
+      <ol style="font-size:13px;line-height:2.2;padding-left:20px;color:var(--text2)">
+        <li>Accede al módulo de administración de tu HCM</li>
+        <li>Ve al listado de empleados activos</li>
+        <li>Exporta en Excel incluyendo: <strong>RUT, nombre, email, departamento, cargo</strong></li>
+        <li>El RUT y el email son los mejores campos para el cruce automático</li>
+      </ol>
+      {% elif platform == "ERP Propio" %}
+      <ol style="font-size:13px;line-height:2.2;padding-left:20px;color:var(--text2)">
+        <li>Accede al panel de administración de tu ERP</li>
+        <li>Ve a <strong>Usuarios del sistema</strong></li>
+        <li>Exporta en Excel o CSV incluyendo: <strong>usuario, nombre, email, RUT</strong></li>
+      </ol>
+      {% elif platform == "Portal Clientes" %}
+      <ol style="font-size:13px;line-height:2.2;padding-left:20px;color:var(--text2)">
+        <li>Accede al panel de administración del portal</li>
+        <li>Ve a <strong>Gestión de usuarios</strong></li>
+        <li>Exporta el listado con: <strong>email, nombre, empresa, estado</strong></li>
+      </ol>
+      {% else %}
+      <p style="font-size:13px;color:var(--text2)">
+        Exporta el listado de usuarios desde el panel de administración de <strong>{{ platform }}</strong>
+        en formato <strong>Excel (.xlsx)</strong> o <strong>CSV</strong>. Incluye siempre las columnas
+        <strong>email</strong> y/o <strong>RUT</strong> para maximizar el cruce automático.
+      </p>
+      {% if extra and extra.col_map %}
+      <div style="margin-top:12px;background:var(--blue-l);border-radius:var(--radius);padding:12px;font-size:12px;color:#0c447c">
+        <strong>Columnas configuradas para esta plataforma:</strong><br>
+        <code style="font-size:11px">{{ extra.col_map }}</code>
+      </div>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- FORMULARIO DE CARGA -->
+  <div class="card">
+    <div class="card-header"><h2>⬆️ Cargar archivo de {{ platform }}</h2></div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="formPlat">
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label>Selecciona el archivo exportado desde {{ platform }}</label>
+          <div id="drop-zone"
+               style="border:2px dashed {{ color }};border-radius:var(--radius);padding:36px;
+                      text-align:center;cursor:pointer;background:var(--gray-ll);transition:.2s"
+               onclick="document.getElementById('archivo').click()"
+               ondragover="event.preventDefault();this.style.background='#e8f4fd'"
+               ondragleave="this.style.background='var(--gray-ll)'"
+               ondrop="handleDrop(event)">
+            <div style="font-size:40px;margin-bottom:10px">📂</div>
+            <div style="font-size:14px;font-weight:500" id="drop-label">
+              Arrastra el archivo aquí o haz clic para seleccionar
+            </div>
+            <div style="font-size:12px;color:var(--text2);margin-top:6px">
+              Formatos aceptados: <strong>.xlsx · .xls · .csv</strong>
+            </div>
+          </div>
+          <input type="file" id="archivo" name="archivo" accept=".xlsx,.xls,.csv"
+                 style="display:none" onchange="mostrarArchivo(this)">
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px">
+          <label>Modo de importación</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+            <label id="lbl-reemplazar" class="plat-check checked" style="align-items:flex-start">
+              <input type="radio" name="modo" value="reemplazar" checked
+                     onchange="document.getElementById('lbl-reemplazar').classList.add('checked');document.getElementById('lbl-agregar').classList.remove('checked')">
+              <div>
+                <div style="font-weight:600;font-size:13px">🔄 Reemplazar</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px">
+                  Borra la carga anterior de {{ platform }} y la reemplaza con este archivo. Recomendado para sincronizaciones periódicas.
+                </div>
+              </div>
+            </label>
+            <label id="lbl-agregar" class="plat-check" style="align-items:flex-start">
+              <input type="radio" name="modo" value="agregar"
+                     onchange="document.getElementById('lbl-agregar').classList.add('checked');document.getElementById('lbl-reemplazar').classList.remove('checked')">
+              <div>
+                <div style="font-weight:600;font-size:13px">➕ Agregar</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px">
+                  Añade los registros del archivo sin borrar los anteriores. Útil para cargas parciales.
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <a href="/plataformas" class="btn">Cancelar</a>
+          <button type="submit" class="btn btn-primary" id="btnImport" disabled
+                  style="background:{{ color }};border-color:{{ color }}">
+            🔄 Importar y cruzar con directorio
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+{% block scripts %}
+<script>
+function mostrarArchivo(input) {
+  const zone  = document.getElementById('drop-zone');
+  const label = document.getElementById('drop-label');
+  const btn   = document.getElementById('btnImport');
+  if (input.files.length > 0) {
+    const f = input.files[0];
+    const kb = (f.size/1024).toFixed(1);
+    label.innerHTML = `<strong>✅ ${f.name}</strong><br><span style="font-size:11px;color:var(--text2)">${kb} KB</span>`;
+    zone.style.background  = 'var(--green-l)';
+    zone.style.borderColor = 'var(--green)';
+    btn.disabled = false;
+  }
+}
+function handleDrop(e) {
+  e.preventDefault();
+  const zone = document.getElementById('drop-zone');
+  zone.style.background = 'var(--gray-ll)';
+  const input = document.getElementById('archivo');
+  input.files = e.dataTransfer.files;
+  mostrarArchivo(input);
+}
+document.getElementById('formPlat').addEventListener('submit', function() {
+  const btn = document.getElementById('btnImport');
+  btn.innerHTML = '⏳ Cruzando con directorio de usuarios...';
+  btn.disabled = true;
+});
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Bajas y desvinculaciones{% endblock %}
+{% block page_title %}Bajas y desvinculaciones{% endblock %}
+{% block topbar_actions %}
+<a href="/bajas/nueva" class="btn btn-danger">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Nueva desvinculación
+</a>
+{% endblock %}
+{% block content %}
+  {% for f, label in [('En proceso','En proceso'), ('Completado','Completadas'), ('Todos','Todas')] %}
+  <a href="/bajas?filtro={{ f }}" class="tab {% if filtro==f %}active{% endif %}">
+    {{ label }} ({{ counts[f] }})
+  </a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th><th>Depto.</th><th>Motivo</th><th>Fecha baja</th>
+          <th>Accesos activos pendientes</th><th>Estado</th><th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>
+            <div><strong>{{ r.full_name }}</strong></div>
+            <div style="font-size:11px;color:var(--text2)">{{ r.email }}</div>
+          </td>
+          <td>{{ r.department or '—' }}</td>
+          <td style="font-size:12px">{{ r.reason or '—' }}</td>
+          <td style="font-size:12px">{{ r.leave_date or '—' }}</td>
+          <td>
+            {% if r.plats_activos %}
+              {% for p in r.plats_activos.split(', ') %}
+                <span class="badge badge-offboarding">{{ p }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-green" style="font-size:12px">✓ Ninguno pendiente</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.status == 'En proceso' %}
+              <span class="badge badge-offboarding">En proceso</span>
+            {% else %}
+              <span class="badge badge-active">Completado</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <a href="/usuarios/{{ r.user_id }}" class="btn btn-sm">Ver</a>
+              {% if r.status == 'En proceso' %}
+              <form method="post" action="/usuarios/{{ r.user_id }}/revocar_todo"
+                    onsubmit="return confirm('¿Revocar todos los accesos de {{ r.full_name }}?')">
+                <button type="submit" class="btn btn-sm btn-danger">Revocar todo</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text2)">Sin registros en esta categoría.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

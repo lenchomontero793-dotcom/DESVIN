@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block page_title %}Configuración del sistema{% endblock %}
+{% block content %}
+
+<div class="tabs" id="main-tabs">
+  <div class="tab active" onclick="showTab('tab-usuarios',this)">👥 Usuarios del sistema</div>
+  <div class="tab" onclick="showTab('tab-roles',this)">🛡️ Roles y permisos</div>
+  {% if can_service %}<a class="tab" href="/configuracion/servicio" style="text-decoration:none">🛠️ Servicio y actualizaciones</a>{% endif %}
+</div>
+
+<!-- ══ TAB USUARIOS ══════════════════════════════════════════════════════════ -->
+<div id="tab-usuarios">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--text2)">{{ sys_users|length }} usuario(s) del sistema configurados</div>
+    <a href="/configuracion/usuarios/nuevo" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nuevo usuario
+    </a>
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>Usuario</th><th>Nombre completo</th><th>Email</th><th>Rol</th><th>Último acceso</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for u in sys_users %}
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:12px;
+                     background:{% if u.active %}var(--blue-l){% else %}var(--gray-l){% endif %};
+                     color:{% if u.active %}var(--blue){% else %}var(--text2){% endif %}">
+                  {{ u.full_name[:2].upper() }}
+                </div>
+                <code style="font-size:13px">{{ u.username }}</code>
+              </div>
+            </td>
+            <td style="font-weight:500">{{ u.full_name }}</td>
+            <td class="text-muted" style="font-size:12px">{{ u.email }}</td>
+            <td>
+              <span class="badge {% if u.role_name == 'Superadmin' %}badge-active{% elif u.role_name == 'Administrador' %}badge-pending{% else %}badge-inactive{% endif %}">
+                {{ u.role_name }}
+              </span>
+            </td>
+            <td class="text-muted" style="font-size:12px">{{ u.last_login or 'Nunca' }}</td>
+            <td>
+              {% if u.active %}
+                <span class="badge badge-active">● Activo</span>
+              {% else %}
+                <span class="badge badge-inactive">● Inactivo</span>
+              {% endif %}
+              {% if u.must_change_pw %}
+                <span class="badge badge-pending" style="margin-left:4px" title="Debe cambiar contraseña">🔑 Temp.</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display:flex;gap:4px">
+                <a href="/configuracion/usuarios/{{ u.id }}/editar" class="btn btn-sm">Editar</a>
+                {% if u.id != current_user.id %}
+                <button class="btn btn-sm" id="btn-toggle-{{ u.id }}"
+                        onclick="toggleUser({{ u.id }}, {{ u.active }})"
+                        style="{% if u.active %}color:var(--red){% else %}color:var(--green){% endif %}">
+                  {% if u.active %}Desactivar{% else %}Activar{% endif %}
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text2)">Sin usuarios configurados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB ROLES ═════════════════════════════════════════════════════════════ -->
+<div id="tab-roles" style="display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--text2)">{{ roles|length }} rol(es) configurados</div>
+    <a href="/configuracion/roles/nuevo" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nuevo rol
+    </a>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
+    {% for r in roles %}
+    {% set perms_obj = {} %}
+    {% if r.permissions != '*' %}
+      {# Jinja can't json.loads, but we pass parsed perms #}
+    {% endif %}
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:40px;height:40px;border-radius:var(--radius);
+               background:{% if r.name=='Superadmin' %}#1a73e8{% elif r.name=='Administrador' %}#1e8e3e{% elif r.name=='Analista' %}#534ab7{% elif r.name=='RRHH' %}#f29900{% else %}#607d8b{% endif %};
+               color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">
+            {% if r.name=='Superadmin' %}👑{% elif r.name=='Administrador' %}🛡{% elif r.name=='Analista' %}📊{% elif r.name=='RRHH' %}👥{% else %}⚙️{% endif %}
+          </div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px">{{ r.name }}</div>
+            <div style="font-size:12px;color:var(--text2)">{{ r.description or 'Sin descripción' }}</div>
+          </div>
+          {% if r.is_system %}<span class="badge badge-pending">Sistema</span>{% endif %}
+        </div>
+
+        <!-- Matriz de permisos -->
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Permisos</div>
+        {% if r.permissions == '*' %}
+        <div style="background:var(--blue-l);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--blue);font-weight:500">
+          ✓ Acceso total al sistema (Superadmin)
+        </div>
+        {% else %}
+        <div style="display:flex;flex-direction:column;gap:4px">
+          {% for mod, actions in perms.items() %}
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+            <span style="width:90px;color:var(--text2);flex-shrink:0;text-transform:capitalize">{{ mod }}</span>
+            <div style="display:flex;gap:3px;flex-wrap:wrap">
+              {% set mod_perms = r.permissions_parsed.get(mod,{}) if r.permissions_parsed is defined else {} %}
+              {% for action, label in actions.items() %}
+                {% if r.permissions and mod in r.permissions and action in r.permissions %}
+                <span style="background:var(--green-l);color:var(--green);padding:1px 6px;border-radius:4px;font-size:10px">{{ action }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div style="margin-top:14px;display:flex;gap:6px">
+          {% if not r.is_system %}
+          <a href="/configuracion/roles/{{ r.id }}/editar" class="btn btn-sm" style="flex:1;justify-content:center">✏️ Editar</a>
+          <form method="post" action="/configuracion/roles/{{ r.id }}/eliminar"
+                onsubmit="return confirm('¿Eliminar el rol {{ r.name }}?')">
+            <button type="submit" class="btn btn-sm" style="color:var(--red)">🗑</button>
+          </form>
+          {% else %}
+          <a href="/configuracion/roles/{{ r.id }}/editar" class="btn btn-sm" style="flex:1;justify-content:center">Ver / Editar</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function showTab(id, el) {
+  ['tab-usuarios','tab-roles'].forEach(t => {
+    document.getElementById(t).style.display = t===id ? '' : 'none';
+  });
+  document.querySelectorAll('#main-tabs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function toggleUser(id, current) {
+  if(!confirm(current ? '¿Desactivar este usuario?' : '¿Activar este usuario?')) return;
+  fetch(`/configuracion/usuarios/${id}/toggle`, {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok) location.reload();
+      else alert(d.msg || 'Error');
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}

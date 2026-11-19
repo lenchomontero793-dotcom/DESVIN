@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}{% if cfg %}Editar {{ cfg.name }}{% else %}Nueva plataforma{% endif %}{% endblock %}
+{% block page_title %}{% if cfg %}Editar plataforma: {{ cfg.name }}{% else %}Agregar nueva plataforma{% endif %}{% endblock %}
+{% block topbar_actions %}
+<a href="/plataformas" class="btn">← Volver</a>
+{% endblock %}
+{% block content %}
+
+<div style="max-width:660px">
+  <form method="post" id="formPlat">
+
+    <!-- IDENTIFICACIÓN -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🏷️ Identificación</h2></div>
+      <div class="card-body">
+        <div class="form-grid">
+
+          <div class="form-group full">
+            <label>Nombre de la plataforma *</label>
+            {% if cfg %}
+              <input type="text" value="{{ cfg.name }}" disabled
+                     style="background:var(--gray-l);color:var(--text2)">
+              <small style="color:var(--text2);font-size:11px">El nombre no puede cambiarse una vez creado.</small>
+            {% else %}
+              <input type="text" name="name" required placeholder="Ej: Jira, Workday, ServiceNow..."
+                     maxlength="60" id="inputName" oninput="autoAbbr(this.value)">
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label>Tipo de sistema</label>
+            <select name="type">
+              {% for t in platform_types %}
+              <option value="{{ t }}" {% if cfg and cfg.type==t %}selected{% elif not cfg and t=='Otro' %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Estado</label>
+            <select name="status">
+              {% for s in ['Operativo','Mantenimiento','Deshabilitado'] %}
+              <option value="{{ s }}" {% if cfg and cfg.status==s %}selected{% elif not cfg and s=='Operativo' %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Abreviatura (máx. 5 caracteres)</label>
+            <input type="text" name="abbr" maxlength="5"
+                   value="{{ extra.abbr if extra else '' }}"
+                   placeholder="Ej: JIRA, WD, SN"
+                   id="inputAbbr" style="text-transform:uppercase">
+          </div>
+
+          <div class="form-group">
+            <label>Color identificador</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="color" name="color" id="colorPicker"
+                     value="{{ extra.color if extra else '#607D8B' }}"
+                     style="width:48px;height:38px;padding:2px;border-radius:var(--radius);cursor:pointer;border:1px solid var(--border)">
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                {% for c in platform_colors %}
+                <div onclick="setColor('{{ c }}')"
+                     style="width:24px;height:24px;border-radius:50%;background:{{ c }};cursor:pointer;border:2px solid transparent;transition:.15s"
+                     class="color-dot" data-color="{{ c }}" title="{{ c }}"></div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group full" style="margin-top:4px">
+            <!-- Preview badge -->
+            <label>Vista previa</label>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--gray-l);border-radius:var(--radius)">
+              <span id="prevBadge" style="background:#607D8B;color:#fff;padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;min-width:60px;text-align:center">
+                {{ extra.abbr if extra and extra.abbr else 'ABR' }}
+              </span>
+              <div>
+                <div id="prevName" style="font-weight:600;font-size:15px">
+                  {{ cfg.name if cfg else 'Nombre de la plataforma' }}
+                </div>
+                <div style="font-size:12px;color:var(--text2)" id="prevType">
+                  {{ cfg.type if cfg else 'Tipo de sistema' }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group full">
+            <label>Notas / descripción</label>
+            <textarea name="notes" placeholder="Descripción del sistema, URL de acceso, contacto de soporte...">{{ cfg.notes if cfg else '' }}</textarea>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- COLUMNAS PERSONALIZADAS -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>📋 Columnas del archivo de exportación</h2></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+          Define las columnas que tendrá el archivo exportado desde esta plataforma.
+          Esto generará la plantilla Excel personalizada y mejorará el cruce automático de datos.
+        </p>
+        <div class="form-group">
+          <label>Columnas separadas por coma</label>
+          <input type="text" name="col_map" id="col_map"
+                 value="{{ extra.col_map if extra and extra.col_map else '' }}"
+                 placeholder="Ej: id_usuario, nombre, email, rut, rol, departamento, estado">
+          <small style="font-size:11px;color:var(--text2)">
+            Incluye siempre <strong>email</strong> o <strong>rut</strong> para que el cruce automático funcione correctamente.
+            Si lo dejas vacío se usará la plantilla genérica.
+          </small>
+        </div>
+
+        <!-- Columnas sugeridas por tipo -->
+        <div style="margin-top:12px">
+          <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px">Sugerencias rápidas:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            {% set sugerencias = [
+              ('RRHH / HCM',       'empleado_id, nombre, email, rut, departamento, cargo, fecha_ingreso, estado'),
+              ('ERP / Finanzas',   'usuario, nombre, email, rut, modulo, rol, estado'),
+              ('CRM / Ventas',     'username, nombre, email, perfil, equipo, licencia, estado'),
+              ('Ticketing / ITSM', 'id_agente, nombre, email, grupo, rol, estado'),
+              ('BI / Analytics',   'usuario, nombre, email, workspace, rol, estado'),
+              ('Genérica',         'nombre, email, rut, id_usuario, rol, estado'),
+            ] %}
+            {% for label, cols in sugerencias %}
+            <button type="button" class="btn btn-sm"
+                    onclick="document.getElementById('col_map').value='{{ cols }}'">
+              {{ label }}
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTONES -->
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <a href="/plataformas" class="btn">Cancelar</a>
+      {% if cfg %}
+        <button type="submit" class="btn btn-primary">💾 Guardar cambios</button>
+      {% else %}
+        <button type="submit" class="btn btn-primary" id="btnCrear">✚ Crear plataforma</button>
+      {% endif %}
+    </div>
+
+  </form>
+
+  <!-- ZONA PELIGROSA (solo para plataformas personalizadas en modo edición) -->
+  {% if cfg %}
+  <div class="card" style="margin-top:24px;border-color:var(--red)">
+    <div class="card-header" style="background:var(--red-l)">
+      <h2 style="color:var(--red)">⚠️ Zona de peligro</h2>
+    </div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+        Al eliminar esta plataforma se borrarán todos sus registros importados y los accesos
+        asociados en el directorio de usuarios. <strong>Esta acción no se puede deshacer.</strong>
+      </p>
+      {% if not is_default %}
+      <form method="post" action="/plataformas/{{ cfg.name }}/eliminar"
+            onsubmit="return confirm('¿Eliminar {{ cfg.name }}? Se borrarán todos sus datos de importación y accesos. Esta acción no se puede deshacer.')">
+        <button type="submit" class="btn btn-danger">🗑 Eliminar plataforma</button>
+      </form>
+      {% else %}
+      <div style="background:var(--amber-l);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:#5c3d00">
+        Esta es una plataforma predeterminada del sistema y no puede eliminarse.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{% block scripts %}
+<script>
+const colorPicker = document.getElementById('colorPicker');
+const prevBadge   = document.getElementById('prevBadge');
+const prevName    = document.getElementById('prevName');
+const prevType    = document.getElementById('prevType');
+const inputAbbr   = document.getElementById('inputAbbr');
+const inputName   = document.getElementById('inputName');
+const typeSelect  = document.querySelector('select[name="type"]');
+
+function updatePreview() {
+  prevBadge.style.background = colorPicker.value;
+  prevBadge.textContent = (inputAbbr?.value || '{{ extra.abbr if extra and extra.abbr else "ABR" }}').toUpperCase() || 'ABR';
+  if (inputName) prevName.textContent = inputName.value || 'Nombre de la plataforma';
+  if (typeSelect) prevType.textContent = typeSelect.value || 'Tipo de sistema';
+}
+
+colorPicker?.addEventListener('input', () => {
+  updatePreview();
+  document.querySelectorAll('.color-dot').forEach(d => {
+    d.style.borderColor = d.dataset.color === colorPicker.value ? '#333' : 'transparent';
+  });
+});
+
+inputAbbr?.addEventListener('input', updatePreview);
+inputName?.addEventListener('input', updatePreview);
+typeSelect?.addEventListener('change', updatePreview);
+
+function setColor(c) {
+  colorPicker.value = c;
+  colorPicker.dispatchEvent(new Event('input'));
+}
+
+function autoAbbr(val) {
+  if (!inputAbbr?.value) {
+    const words = val.trim().split(/\s+/);
+    let abbr = words.length > 1
+      ? words.slice(0,3).map(w=>w[0]).join('').toUpperCase()
+      : val.substring(0,4).toUpperCase();
+    inputAbbr.value = abbr;
+    updatePreview();
+  }
+}
+
+// Mark selected color dot
+document.querySelectorAll('.color-dot').forEach(d => {
+  if (d.dataset.color === colorPicker?.value)
+    d.style.borderColor = '#333';
+  d.addEventListener('mouseenter', () => d.style.opacity='.8');
+  d.addEventListener('mouseleave', () => d.style.opacity='1');
+});
+
+updatePreview();
+</script>
+{% endblock %}
+{% endblock %}

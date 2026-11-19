@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UserSync — Iniciar sesión</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(135deg,#1a1f36 0%,#2d3561 50%,#1a73e8 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.35);width:100%;max-width:400px;overflow:hidden}
+.card-header{background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:36px 32px 28px;text-align:center;color:#fff}
+.card-header h1{font-size:26px;font-weight:700;margin-bottom:4px;letter-spacing:-.5px}
+.card-header p{font-size:13px;opacity:.8}
+.logo-circle{width:64px;height:64px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px}
+.card-body{padding:32px}
+.form-group{margin-bottom:18px}
+label{display:block;font-size:12px;font-weight:600;color:#5f6368;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+input[type=text],input[type=password]{width:100%;padding:12px 14px;border:1.5px solid #dadce0;border-radius:8px;font-size:14px;outline:none;transition:.2s;font-family:inherit;color:#202124}
+input:focus{border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.12)}
+.input-wrap{position:relative}
+.eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#5f6368;font-size:16px;padding:4px}
+.btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:.2s;margin-top:8px;font-family:inherit}
+.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,115,232,.4)}
+.btn-login:active{transform:none}
+.remember{display:flex;align-items:center;gap:8px;font-size:13px;color:#5f6368;margin-bottom:20px;cursor:pointer}
+.remember input{accent-color:#1a73e8;width:15px;height:15px}
+.error{background:#fce8e6;border:1px solid #f5c6c3;color:#c5221f;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-footer{background:#f8f9fa;border-top:1px solid #dadce0;padding:14px 32px;text-align:center;font-size:12px;color:#5f6368}
+.hint{background:#e8f0fe;border-radius:8px;padding:12px;font-size:12px;color:#1a73e8;margin-bottom:20px;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <div class="logo-circle">👤</div>
+    <h1>UserSync</h1>
+    <p>Gestión de identidades empresariales</p>
+  </div>
+  <div class="card-body">
+    {% if show_hint %}
+    <div class="hint">
+      🔑 <strong>Acceso inicial:</strong> usuario <code>admin</code> · contraseña <code>admin123</code>
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="error">⚠️ {{ error }}</div>
+    {% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+      <div class="error" style="{% if cat=='success' %}background:#e6f4ea;border-color:#a8d5b5;color:#1e5c32{% endif %}">
+        {{ msg }}
+      </div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <div class="form-group">
+        <label>Usuario o Email</label>
+        <input type="text" name="username" placeholder="usuario o correo@empresa.com"
+               autofocus autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <div class="input-wrap">
+          <input type="password" name="password" id="pw" placeholder="••••••••"
+                 autocomplete="current-password" required>
+          <button type="button" class="eye-btn" onclick="togglePw()">👁</button>
+        </div>
+      </div>
+      <label class="remember">
+        <input type="checkbox" name="remember"> Mantener sesión iniciada
+      </label>
+      <button type="submit" class="btn-login">Iniciar sesión →</button>
+    </form>
+  </div>
+  <div class="card-footer">
+    UserSync v{{ APP_VERSION }}
+  </div>
+</div>
+<script>
+function togglePw(){
+  const i=document.getElementById('pw');
+  i.type = i.type==='password'?'text':'password';
+}
+</script>
+</body>
+</html>

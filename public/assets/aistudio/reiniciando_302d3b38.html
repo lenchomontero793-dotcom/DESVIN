@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UserSync — Reiniciando</title>
+<style>
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f8f9fa;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;color:#202124}
+.box{background:#fff;border:1px solid #dadce0;border-radius:12px;padding:40px 48px;text-align:center;max-width:460px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.spin{width:44px;height:44px;border:4px solid #e8f0fe;border-top-color:#1a73e8;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 20px}
+@keyframes s{to{transform:rotate(360deg)}}
+h1{font-size:18px;margin:0 0 8px}p{font-size:13px;color:#5f6368;margin:6px 0}
+a{color:#1a73e8}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="spin" id="spin"></div>
+  <h1 id="title">Reiniciando UserSync…</h1>
+  <p id="msg">Esto toma entre 15 y 60 segundos. Esta página te llevará de vuelta automáticamente.</p>
+</div>
+<script>
+const OLD_BOOT  = "{{ old_boot }}";
+const PORT      = {{ target_port }};
+const SAME_PORT = {{ 'true' if same_port else 'false' }};
+const target    = location.protocol + '//' + location.hostname + ':' + PORT + '/';
+let tries = 0;
+
+function done() { location.href = target; }
+
+async function poll() {
+  tries++;
+  try {
+    if (SAME_PORT) {
+      const r = await fetch('/health', {cache:'no-store'});
+      const j = await r.json();
+      if (j.boot_id && j.boot_id !== OLD_BOOT) return done();   // arrancó una instancia nueva
+    } else {
+      await fetch(target + 'health', {mode:'no-cors', cache:'no-store'});  // si responde, el nuevo puerto ya está activo
+      return done();
+    }
+  } catch (e) { /* aún reiniciando */ }
+  if (tries > 70) {
+    document.getElementById('spin').style.display = 'none';
+    document.getElementById('title').textContent = 'El servicio tarda más de lo esperado';
+    document.getElementById('msg').innerHTML =
+      'Revisa la ventana negra de UserSync en el servidor: si se cerró, ábrela de nuevo con <b>INICIAR_USERSYNC.bat</b>. ' +
+      '<br><br><a href="' + target + '">Intentar abrir UserSync</a>';
+    return;
+  }
+  setTimeout(poll, 1500);
+}
+setTimeout(poll, 3000);
+</script>
+</body>
+</html>

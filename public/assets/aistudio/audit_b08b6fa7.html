@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Audit Log{% endblock %}
+{% block page_title %}Audit Log{% endblock %}
+{% block topbar_actions %}
+<a href="/reportes/exportar?tipo=audit&formato=csv" class="btn">
+  📊 Exportar CSV
+</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h2>Últimos 200 eventos del sistema</h2></div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Acción</th><th>Usuario afectado</th><th>Detalle</th><th>Realizado por</th><th>Fecha y hora</th></tr>
+      </thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td class="text-muted" style="font-size:11px">{{ l.id }}</td>
+          <td><strong>{{ l.action }}</strong></td>
+          <td>
+            {% if l.full_name %}
+              <a href="/usuarios/{{ l.user_id }}">{{ l.full_name }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-muted" style="font-size:12px;max-width:300px">{{ l.detail or '—' }}</td>
+          <td style="font-size:12px">{{ l.performed_by }}</td>
+          <td class="text-muted" style="font-size:12px;white-space:nowrap">{{ l.created_at }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text2)">Sin registros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Importar usuarios{% endblock %}
+{% block page_title %}Importar usuarios desde Excel{% endblock %}
+{% block content %}
+
+<div style="max-width:700px">
+
+  <!-- INSTRUCCIONES -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <h2>📋 Antes de importar</h2>
+      <a href="/importar/plantilla" class="btn btn-primary btn-sm">
+        ⬇️ Descargar plantilla Excel
+      </a>
+    </div>
+    <div class="card-body">
+      <p style="font-size:13px;margin-bottom:14px">
+        Descarga la plantilla oficial, rellénala con tus usuarios y luego súbela aquí.
+        También puedes usar tu propio Excel siempre que tenga las columnas mínimas requeridas.
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="background:var(--blue-l);border-radius:var(--radius);padding:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--blue)">✅ Columnas obligatorias</div>
+          <div style="font-size:12px;display:flex;flex-direction:column;gap:4px">
+            <span><code style="background:#fff;padding:1px 6px;border-radius:4px">nombre</code> — Nombre completo</span>
+            <span><code style="background:#fff;padding:1px 6px;border-radius:4px">email</code> — Correo corporativo (único)</span>
+          </div>
+        </div>
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">📌 Columnas opcionales</div>
+          <div style="font-size:12px;display:flex;flex-direction:column;gap:3px;color:var(--text2)">
+            <span>rut · departamento · cargo · jefe</span>
+            <span>telefono · fecha_contrato · notas</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#e6f4ea;border-radius:var(--radius);padding:12px;font-size:12px;color:#1e5c32">
+        <strong>💡 Plataformas:</strong> Agrega columnas con el nombre exacto de cada plataforma
+        (SAP, Salesforce, Office 365, HCM, ERP Propio, Portal Clientes) y pon <strong>1</strong> si el usuario tiene acceso o <strong>0</strong> si no.
+      </div>
+    </div>
+  </div>
+
+  <!-- FORMULARIO SUBIDA -->
+  <div class="card">
+    <div class="card-header"><h2>📤 Subir archivo</h2></div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="formImport">
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label>Archivo Excel o CSV</label>
+          <div id="drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:.2s;background:var(--gray-ll)"
+               onclick="document.getElementById('archivo').click()"
+               ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--blue-l)'"
+               ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--gray-ll)'"
+               ondrop="handleDrop(event)">
+            <div style="font-size:32px;margin-bottom:8px">📂</div>
+            <div style="font-size:14px;font-weight:500" id="drop-label">Arrastra tu archivo aquí o haz clic para seleccionar</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:4px">Formatos aceptados: .xlsx, .xls, .csv</div>
+          </div>
+          <input type="file" id="archivo" name="archivo" accept=".xlsx,.xls,.csv"
+                 style="display:none" onchange="mostrarArchivo(this)">
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px">
+          <label>¿Qué hacer si el email ya existe?</label>
+          <div style="display:flex;gap:12px;margin-top:6px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400">
+              <input type="radio" name="modo" value="omitir" checked> Omitir duplicados (no modifica los existentes)
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:400">
+              <input type="radio" name="modo" value="actualizar"> Actualizar datos del usuario existente
+            </label>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <a href="/usuarios" class="btn">Cancelar</a>
+          <button type="submit" class="btn btn-primary" id="btnImport" disabled>
+            ⬆️ Importar usuarios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EJEMPLO VISUAL -->
+  <div class="card" style="margin-top:20px">
+    <div class="card-header"><h2>👀 Vista previa de la plantilla</h2></div>
+    <div class="card-body" style="overflow-x:auto;padding:0">
+      <table style="font-size:11px;min-width:600px">
+        <thead>
+          <tr>
+            {% for h in ['nombre','email','rut','departamento','cargo','jefe','SAP','Salesforce','Office 365','HCM'] %}
+            <th style="{% if loop.index <= 6 %}background:#1a73e8;color:#fff{% else %}background:#34a853;color:#fff{% endif %}">{{ h }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Ana Garcia Lopez</td><td>a.garcia@empresa.com</td><td>12.345.678-9</td>
+            <td>TI</td><td>Analista</td><td>Carlos Jefe</td>
+            <td style="text-align:center">1</td><td style="text-align:center">0</td>
+            <td style="text-align:center">1</td><td style="text-align:center">1</td>
+          </tr>
+          <tr style="background:var(--gray-ll)">
+            <td>Carlos Mendoza</td><td>c.mendoza@empresa.com</td><td>15.678.901-2</td>
+            <td>Ventas</td><td>Ejecutivo</td><td>Pedro Gerente</td>
+            <td style="text-align:center">0</td><td style="text-align:center">1</td>
+            <td style="text-align:center">1</td><td style="text-align:center">1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{% block scripts %}
+<script>
+function mostrarArchivo(input) {
+  const label = document.getElementById('drop-label');
+  const btn   = document.getElementById('btnImport');
+  const zone  = document.getElementById('drop-zone');
+  if (input.files.length > 0) {
+    label.textContent = '✅ ' + input.files[0].name;
+    zone.style.borderColor = 'var(--green)';
+    zone.style.background  = 'var(--green-l)';
+    btn.disabled = false;
+  }
+}
+function handleDrop(e) {
+  e.preventDefault();
+  const zone = document.getElementById('drop-zone');
+  zone.style.borderColor = 'var(--border)';
+  zone.style.background  = 'var(--gray-ll)';
+  const input = document.getElementById('archivo');
+  input.files = e.dataTransfer.files;
+  mostrarArchivo(input);
+}
+document.getElementById('formImport').addEventListener('submit', function() {
+  const btn = document.getElementById('btnImport');
+  btn.textContent = '⏳ Importando...';
+  btn.disabled = true;
+});
+</script>
+{% endblock %}
+{% endblock %}

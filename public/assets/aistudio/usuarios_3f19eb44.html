@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block page_title %}Directorio de usuarios{% endblock %}
+{% block topbar_actions %}
+<a href="/importar" class="btn">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+  Importar Excel
+</a>
+<a href="/usuarios/nuevo" class="btn btn-primary">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Nuevo usuario
+</a>
+{% endblock %}
+{% block content %}
+
+<form method="get" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+  <select name="status" onchange="this.form.submit()" style="width:auto;padding:7px 12px">
+    <option value="">Todos los estados</option>
+    {% for s in ['Activo','Inactivo','Pendiente','En proceso de baja'] %}
+    <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="dept" onchange="this.form.submit()" style="width:auto;padding:7px 12px">
+    <option value="">Todos los departamentos</option>
+    {% for d in departments %}
+    <option value="{{ d }}" {% if dept==d %}selected{% endif %}>{{ d }}</option>
+    {% endfor %}
+  </select>
+  <select name="platform" onchange="this.form.submit()" style="width:auto;padding:7px 12px">
+    <option value="">Todas las plataformas</option>
+    {% for p in all_platforms %}
+    <option value="{{ p }}" {% if platform==p %}selected{% endif %}>{{ p }}</option>
+    {% endfor %}
+  </select>
+  {% if q or status or dept or platform %}
+  <a href="/usuarios" class="btn">Limpiar filtros</a>
+  {% endif %}
+  <span style="margin-left:auto;font-size:13px;color:var(--text2);align-self:center">{{ users|length }} usuario(s)</span>
+</form>
+
+<div class="card">
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th><th>Email</th><th>RUT</th><th>Departamento</th>
+          <th>Estado</th><th>Plataformas</th><th>Contratado</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in users %}
+        {% set u = row.user %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="user-avatar" style="width:32px;height:32px;font-size:13px">{{ u.full_name[:2].upper() }}</div>
+              <strong>{{ u.full_name }}</strong>
+            </div>
+          </td>
+          <td class="text-muted">{{ u.email }}</td>
+          <td class="text-muted" style="font-size:12px">{{ u.rut or '—' }}</td>
+          <td>{{ u.department or '—' }}</td>
+          <td>
+            {% if u.status == 'Activo' %}<span class="badge badge-active">● Activo</span>
+            {% elif u.status == 'Inactivo' %}<span class="badge badge-inactive">● Inactivo</span>
+            {% elif u.status == 'Pendiente' %}<span class="badge badge-pending">● Pendiente</span>
+            {% else %}<span class="badge badge-offboarding">● En baja</span>{% endif %}
+          </td>
+          <td>
+            {% for p in row.platforms %}
+              {% set abbr = {'SAP':'SAP','Salesforce':'SF','Office 365':'O365','HCM':'HCM','ERP Propio':'ERP','Portal Clientes':'WEB'} %}
+              {% set cls = {'SAP':'plat-SAP','Salesforce':'plat-Salesforce','Office 365':'plat-Office','HCM':'plat-HCM','ERP Propio':'plat-ERP','Portal Clientes':'plat-Portal'} %}
+              <span class="plat-pill {{ cls.get(p,'') }}" title="{{ p }}">{{ abbr.get(p,p[:3]) }}</span>
+            {% endfor %}
+            {% if not row.platforms %}<span class="text-muted" style="font-size:12px">Sin accesos</span>{% endif %}
+          </td>
+          <td class="text-muted" style="font-size:12px">{{ u.hire_date or '—' }}</td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <a href="/usuarios/{{ u.id }}" class="btn btn-sm">Ver</a>
+              <a href="/usuarios/{{ u.id }}/editar" class="btn btn-sm">Editar</a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text2)">No se encontraron usuarios.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

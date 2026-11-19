@@ -1,0 +1,75 @@
+UserSync v1.6.0 - Gestion de identidades
+==========================================
+
+REQUISITOS
+  Windows 10/11 y Python 3.9 o superior (python.org, marcar "Add Python to PATH").
+
+INICIAR
+  Doble clic en INICIAR_USERSYNC.bat. La primera vez instala las dependencias (requiere internet).
+  Se abre el navegador en http://127.0.0.1:5000  (el puerto se puede cambiar, ver mas abajo).
+  Acceso inicial: usuario "admin" / contrasena "admin123" (el sistema obliga a cambiarla).
+  Para detener el servicio, cierra la ventana negra.
+
+DONDE ESTAN TUS DATOS  (importante)
+  Todo lo que es dato vive en la carpeta  data\  :
+      data\usersync.db     base de datos (usuarios, plataformas, roles, auditoria...)
+      data\config.json     configuracion del servicio
+      data\backups\        respaldos
+  El codigo (app.py, templates\) esta separado de los datos: actualizar el codigo NO toca data\.
+  Para respaldar a mano todo el sistema basta copiar la carpeta data\.
+
+PASAR DESDE UNA VERSION ANTERIOR (solo esta vez, es manual)
+  1. Cierra la ventana de UserSync actual.
+  2. Descomprime esta version en una carpeta nueva.
+  3. Copia tu archivo  usersync.db  antiguo dentro de la carpeta nueva, junto a app.py.
+     Al iniciar, el sistema lo mueve solo a data\ (y deja el original como usersync.db.migrado).
+  4. Ejecuta INICIAR_USERSYNC.bat.
+  Desde aqui, las mejoras se cargan desde la propia pantalla (ver siguiente seccion).
+
+CARGAR UNA MEJORA EN PRODUCCION (sin perder informacion)
+  Configuracion > "Servicio y actualizaciones" > pestana "Actualizar version"
+  1. Selecciona el paquete .zip de la mejora (opcional: pega su codigo SHA-256 para verificarlo).
+  2. "Validar paquete": se prueba en un proceso aparte sobre una COPIA de tu base de datos y
+     se muestra que archivos cambian. Si la prueba falla, no se puede instalar.
+  3. "Aplicar actualizacion": crea un respaldo automatico (datos + codigo) y reemplaza solo los
+     archivos del paquete. Nunca se borra nada ni se toca data\.
+  4. "Reiniciar ahora": el servicio se relanza solo y la pagina te devuelve al sistema.
+  Si algo no te convence: pestana "Respaldos" > "Restaurar codigo" (vuelve a la version anterior
+  y conserva tus datos actuales) o "Restaurar datos". Antes de cada restauracion se guarda otro
+  respaldo del estado actual, asi que siempre se puede deshacer.
+  Cambios de base de datos: las mejoras que los necesiten traen "migraciones" que se aplican
+  una sola vez, en una transaccion, con respaldo previo; si una falla se revierte completa.
+  El historial de versiones aplicadas queda registrado y se conserva aunque restaures datos.
+
+CONFIGURACION DEL SERVICIO
+  Configuracion > "Servicio y actualizaciones" > "Parametros":
+   - Se aplican al guardar: nombre de la organizacion, email de notificacion, dias de gracia,
+     duracion de la sesion, frecuencia de revision de las sincronizaciones API, respaldos a conservar.
+   - Requieren reinicio: puerto y acceso (solo este equipo / toda la red). Si eliges un puerto
+     ocupado, el sistema no te deja guardarlo. Para acceso desde la red, permite el puerto en el
+     Firewall de Windows y usalo solo en una red interna (el acceso es HTTP sin cifrar).
+  Permiso nuevo para roles a medida:  Configuracion > "Servicio y actualizaciones"
+  (el Superadmin lo tiene siempre). Es un permiso delicado: permite instalar codigo.
+
+ASISTENTE IA (opcional)
+  Menu lateral > "Asistente IA". Es un chat que revisa el estado de tu instalacion y te PROPONE cambios de
+  parametros: servicio, sincronizacion de APIs, mapeo de campos, datos de plataformas, roles y permisos.
+  Nada se aplica hasta que confirmas cada propuesta (se muestra "ahora -> propuesto"), todo queda en la
+  auditoria y se puede deshacer. Las propuestas caducan a la hora.
+  Activarlo: Configuracion > "Servicio y actualizaciones" > pestana "Asistente IA".
+   - Claude (Anthropic, en la nube): necesita una API key de la consola de Anthropic (es distinta de una
+     suscripcion a Claude.ai y se factura por uso). Tambien sirve la variable ANTHROPIC_API_KEY.
+   - Ollama (local): instala Ollama y un modelo (ollama pull llama3.1). Nada sale de tu red.
+  Que recibe el proveedor: solo parametros del sistema y conteos agregados, mas tu conversacion.
+  Nunca usuarios, RUT, correos, contrasenas, tokens, URLs de API ni claves.
+  Que NO puede hacer: modificar codigo (eso sigue entrando como actualizacion), cambiar URLs o credenciales
+  de las APIs, ver datos de personas, borrar plataformas o roles, ni reiniciar el servicio.
+  Permiso para roles a medida: Configuracion > "Asistente IA". Ademas, cada propuesta exige el permiso del
+  area que modifica (por ejemplo, editar plataformas).
+
+SI ALGO SALE MAL
+  - La ventana negra muestra los mensajes del servicio.
+  - Si el puerto configurado esta ocupado al iniciar, arranca en el 5000 y avisa en Servicio.
+  - Codigo de salida 2 = puerto ocupado sin alternativa. Cierra el programa que lo usa.
+  - Como ultimo recurso: detén el servicio, copia un respaldo de data\backups\ y descomprimelo
+    (contiene db\usersync.db y code\ con el codigo de ese momento).

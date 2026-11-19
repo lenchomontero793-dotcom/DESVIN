@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}{% if rol %}Editar rol{% else %}Nuevo rol{% endif %}{% endblock %}
+{% block page_title %}{% if rol %}Editar rol: {{ rol.name }}{% else %}Crear nuevo rol{% endif %}{% endblock %}
+{% block topbar_actions %}
+<a href="/configuracion" class="btn">← Configuración</a>
+{% endblock %}
+{% block content %}
+
+<div style="max-width:700px">
+  <form method="post" id="formRol">
+    <!-- IDENTIDAD DEL ROL -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🏷️ Identificación del rol</h2></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Nombre del rol *</label>
+            <input type="text" name="name" required
+                   value="{{ rol.name if rol else '' }}"
+                   placeholder="Ej: Jefe de Plataformas"
+                   {% if rol and rol.is_system %}readonly style="background:var(--gray-l)"{% endif %}>
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <input type="text" name="description"
+                   value="{{ rol.description if rol else '' }}"
+                   placeholder="Breve descripción de este rol">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATRIZ DE PERMISOS -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🔐 Permisos por módulo</h2>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn btn-sm" onclick="setAll(true)">Marcar todo</button>
+          <button type="button" class="btn btn-sm" onclick="setAll(false)">Desmarcar todo</button>
+        </div>
+      </div>
+      <div class="card-body">
+
+        {% if rol and rol.is_system and rol.permissions == '*' %}
+        <div style="background:var(--blue-l);border-radius:var(--radius);padding:14px;font-size:13px;color:#0c447c;margin-bottom:16px">
+          👑 Este es el rol <strong>Superadmin</strong> con acceso total. Sus permisos no pueden modificarse.
+        </div>
+        {% endif %}
+
+        {% set module_icons = {
+          'usuarios':'👤','plataformas':'🖥️','reportes':'📊','bajas':'🚪',
+          'configuracion':'⚙️','audit':'📋'
+        } %}
+        {% set module_labels = {
+          'usuarios':'Usuarios','plataformas':'Plataformas','reportes':'Reportes',
+          'bajas':'Bajas y desvinculaciones','configuracion':'Configuración','audit':'Audit Log'
+        } %}
+
+        <div style="display:flex;flex-direction:column;gap:2px">
+          {% for module, actions in perms.items() %}
+          {% set mod_current = current_perms.get(module, {}) if current_perms is defined else {} %}
+
+          <!-- Fila de módulo -->
+          <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:6px">
+            <!-- Header del módulo -->
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--gray-l);cursor:pointer"
+                 onclick="toggleModule('mod-{{ module }}')">
+              <span style="font-size:16px">{{ module_icons.get(module,'📦') }}</span>
+              <span style="font-weight:600;font-size:13px;flex:1">{{ module_labels.get(module, module.title()) }}</span>
+              <!-- Select all en módulo -->
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:400;cursor:pointer"
+                     onclick="event.stopPropagation()">
+                <input type="checkbox" id="all-{{ module }}"
+                       onchange="setModule('{{ module }}', this.checked)"
+                       {% if mod_current %}checked{% endif %}>
+                Todo el módulo
+              </label>
+              <span style="color:var(--text2);font-size:12px" id="arrow-{{ module }}">▼</span>
+            </div>
+
+            <!-- Permisos individuales -->
+            <div id="mod-{{ module }}" style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+              {% for action, label in actions.items() %}
+              {% set is_checked = mod_current.get(action, False) %}
+              <label class="plat-check {% if is_checked %}checked{% endif %}"
+                     id="lbl-{{ module }}-{{ action }}"
+                     style="font-size:12px;font-weight:400">
+                <input type="checkbox" name="perm_{{ module }}_{{ action }}" value="1"
+                       class="perm-{{ module }}"
+                       {% if is_checked %}checked{% endif %}
+                       {% if rol and rol.is_system and rol.permissions == '*' %}disabled{% endif %}
+                       onchange="this.closest('label').classList.toggle('checked',this.checked); updateModuleCheck('{{ module }}')">
+                <div>
+                  <div style="font-weight:500">
+                    {% if action == 'ver' %}👁 Ver
+                    {% elif action == 'crear' %}✚ Crear
+                    {% elif action == 'editar' %}✏️ Editar
+                    {% elif action == 'eliminar' %}🗑 Eliminar/Dar de baja
+                    {% elif action == 'exportar' %}⬇️ Exportar
+                    {% elif action == 'importar' %}⬆️ Importar planillas
+                    {% elif action == 'gestionar' %}🔧 Gestionar
+                    {% elif action == 'servicio' %}🛠 Servicio y actualizaciones
+                    {% elif action == 'asistente' %}🤖 Asistente IA
+                    {% else %}{{ action.title() }}{% endif %}
+                  </div>
+                  <div style="font-size:10px;color:var(--text2)">{{ label }}</div>
+                </div>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- PREVIEW EN TIEMPO REAL -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>👁️ Vista previa del rol</h2></div>
+      <div class="card-body">
+        <div id="preview-content" style="font-size:13px;color:var(--text2)">
+          Selecciona permisos arriba para ver la vista previa.
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <a href="/configuracion" class="btn">Cancelar</a>
+      <button type="submit" class="btn btn-primary"
+              {% if rol and rol.is_system and rol.permissions == '*' %}
+              onclick="return confirm('¿Guardar cambios en el rol Superadmin?')"
+              {% endif %}>
+        {% if rol %}💾 Guardar cambios{% else %}✚ Crear rol{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+
+{% block scripts %}
+<script>
+function setAll(val) {
+  document.querySelectorAll('input[type=checkbox][name^=perm_]').forEach(cb => {
+    if (!cb.disabled) {
+      cb.checked = val;
+      cb.closest('label').classList.toggle('checked', val);
+    }
+  });
+  document.querySelectorAll('[id^=all-]').forEach(cb => { if(!cb.disabled) cb.checked = val; });
+  updatePreview();
+}
+
+function setModule(mod, val) {
+  document.querySelectorAll(`.perm-${mod}`).forEach(cb => {
+    if (!cb.disabled) {
+      cb.checked = val;
+      cb.closest('label').classList.toggle('checked', val);
+    }
+  });
+  updatePreview();
+}
+
+function updateModuleCheck(mod) {
+  const all  = document.querySelectorAll(`.perm-${mod}`);
+  const chkd = document.querySelectorAll(`.perm-${mod}:checked`);
+  const allCb = document.getElementById(`all-${mod}`);
+  if (allCb) allCb.checked = all.length === chkd.length && all.length > 0;
+  updatePreview();
+}
+
+function toggleModule(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById('arrow-' + id.replace('mod-',''));
+  if (el.style.display === 'none') {
+    el.style.display = ''; arrow.textContent = '▼';
+  } else {
+    el.style.display = 'none'; arrow.textContent = '▶';
+  }
+}
+
+const MODULE_LABELS = {
+  'usuarios':'Usuarios','plataformas':'Plataformas','reportes':'Reportes',
+  'bajas':'Bajas','configuracion':'Configuración','audit':'Audit Log'
+};
+const ACTION_LABELS = {
+  'ver':'Ver','crear':'Crear','editar':'Editar','eliminar':'Dar de baja',
+  'exportar':'Exportar','importar':'Importar','gestionar':'Gestionar','servicio':'Servicio','asistente':'Asistente IA'
+};
+
+function updatePreview() {
+  const modules = {};
+  document.querySelectorAll('input[type=checkbox][name^=perm_]:checked').forEach(cb => {
+    const parts = cb.name.replace('perm_','').split('_');
+    const mod    = parts[0];
+    const action = parts.slice(1).join('_');
+    if (!modules[mod]) modules[mod] = [];
+    modules[mod].push(ACTION_LABELS[action] || action);
+  });
+  const preview = document.getElementById('preview-content');
+  if (Object.keys(modules).length === 0) {
+    preview.innerHTML = '<span style="color:var(--red)">⚠️ Sin permisos asignados — este rol no podrá acceder a nada.</span>';
+    return;
+  }
+  let html = '<div style="display:flex;flex-direction:column;gap:8px">';
+  for (const [mod, actions] of Object.entries(modules)) {
+    html += `<div style="display:flex;align-items:center;gap:8px">
+      <span style="width:110px;font-size:12px;color:var(--text2)">${MODULE_LABELS[mod]||mod}</span>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">`;
+    actions.forEach(a => {
+      html += `<span style="background:var(--blue-l);color:var(--blue);padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500">${a}</span>`;
+    });
+    html += `</div></div>`;
+  }
+  html += '</div>';
+  preview.innerHTML = html;
+}
+
+// Init preview and module check states
+document.addEventListener('DOMContentLoaded', () => {
+  updatePreview();
+  {% for module in perms %}
+  updateModuleCheck('{{ module }}');
+  {% endfor %}
+});
+</script>
+{% endblock %}
+{% endblock %}

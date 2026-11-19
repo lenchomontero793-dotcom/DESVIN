@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}API {{ name }}{% endblock %}
+{% block page_title %}Configuración API — {{ name }}{% endblock %}
+{% block topbar_actions %}
+{% if cfg and cfg.base_url %}
+<button class="btn" id="btn-test" onclick="testConnection()">🔌 Probar conexión</button>
+<form method="post" action="/plataformas/{{ name }}/api/sync" style="display:inline">
+  <button type="submit" class="btn btn-primary"
+          onclick="return confirm('¿Ejecutar sincronización forzada ahora?')">
+    🔄 Sincronizar ahora
+  </button>
+</form>
+{% endif %}
+<a href="/plataformas" class="btn">← Plataformas</a>
+{% endblock %}
+{% block content %}
+
+{% set color = meta.color %}
+{% set abbr  = meta.abbr %}
+
+<!-- ESTADO ACTUAL -->
+{% if cfg and cfg.base_url %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+  <div class="metric" style="border-top:3px solid {{ color }}">
+    <div class="metric-label">Estado API</div>
+    <div class="metric-value" style="color:{% if cfg.last_sync_status=='ok' %}var(--green){% elif cfg.last_sync_status=='error' %}var(--red){% else %}var(--text2){% endif %};font-size:18px">
+      {% if cfg.last_sync_status=='ok' %}✓ Operativa{% elif cfg.last_sync_status=='error' %}✗ Error{% else %}— Sin sync{% endif %}
+    </div>
+    <div class="metric-sub">{{ cfg.api_type or '—' }}</div>
+  </div>
+  <div class="metric" style="border-top:3px solid var(--blue)">
+    <div class="metric-label">Última sincronización</div>
+    <div class="metric-value blue" style="font-size:14px">{{ cfg.last_sync[:16] if cfg.last_sync else '—' }}</div>
+    <div class="metric-sub">{{ cfg.last_sync_count or 0 }} registros</div>
+  </div>
+  <div class="metric" style="border-top:3px solid var(--green)">
+    <div class="metric-label">Registros cruzados</div>
+    <div class="metric-value green">{{ stats.matched }}</div>
+    <div class="metric-sub">de {{ stats.total }} en plataforma</div>
+  </div>
+  <div class="metric" style="border-top:3px solid {% if cfg.sync_enabled %}var(--green){% else %}var(--text2){% endif %}">
+    <div class="metric-label">Sync automática</div>
+    <div class="metric-value" style="color:{% if cfg.sync_enabled %}var(--green){% else %}var(--text2){% endif %};font-size:16px">
+      {% if cfg.sync_enabled %}✓ Activa{% else %}— Inactiva{% endif %}
+    </div>
+    <div class="metric-sub">{% if cfg.sync_enabled %}Cada {{ cfg.sync_interval }}h{% else %}Solo manual{% endif %}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- TEST RESULT BANNER -->
+<div id="test-banner" style="display:none;margin-bottom:16px"></div>
+
+<form method="post" id="formAPI">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+  <!-- ══ COLUMNA IZQUIERDA ══════════════════════════════════════════════════ -->
+  <div>
+
+    <!-- TIPO Y URL -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <span style="background:{{ color }};color:#fff;padding:3px 10px;border-radius:5px;font-weight:700;font-size:12px">{{ abbr }}</span>
+        <h2 style="margin-left:6px">Conexión</h2>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Tipo de API *</label>
+          <select name="api_type" id="api_type" onchange="updateTemplate(this.value)">
+            {% for t,l in [('office365','Microsoft 365 / Azure AD'),('salesforce','Salesforce'),
+                           ('sap','SAP'),('workday','Workday'),('custom','API personalizada / REST')] %}
+            <option value="{{ t }}" {% if cfg and cfg.api_type==t %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>URL del endpoint de usuarios *</label>
+          <input type="url" name="base_url" id="base_url" required
+                 value="{{ cfg.base_url if cfg else '' }}"
+                 placeholder="https://api.ejemplo.com/v1/users">
+          <small style="font-size:11px;color:var(--text2)" id="url-hint">URL completa del endpoint que retorna el listado de usuarios</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUTENTICACIÓN -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🔐 Autenticación</h2></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Tipo de autenticación</label>
+          <select name="auth_type" id="auth_type" onchange="showAuth(this.value)">
+            {% for v,l in [('bearer','Bearer Token (JWT)'),('basic','Usuario y Contraseña (Basic Auth)'),
+                           ('apikey','API Key'),('oauth2_cc','OAuth 2.0 Client Credentials')] %}
+            <option value="{{ v }}" {% if cfg and cfg.auth_type==v %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Bearer / API Key -->
+        <div id="auth-token">
+          <div class="form-group">
+            <label id="token-label">Token / API Key</label>
+            <input type="password" name="token" id="token-input"
+                   value="{{ cfg.token if cfg else '' }}"
+                   placeholder="eyJhbGciOiJSUzI1NiJ9...">
+            <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="show-token" onchange="document.getElementById('token-input').type=this.checked?'text':'password'">
+              <label for="show-token" style="font-size:11px;font-weight:400;color:var(--text2)">Mostrar token</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Basic Auth -->
+        <div id="auth-basic" style="display:none">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Usuario</label>
+              <input type="text" name="api_username" value="{{ cfg.username if cfg else '' }}" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Contraseña</label>
+              <input type="password" name="api_password" value="{{ cfg.password if cfg else '' }}" autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+        <!-- OAuth2 -->
+        <div id="auth-oauth2" style="display:none">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Client ID</label>
+              <input type="text" name="client_id" value="{{ cfg.client_id if cfg else '' }}">
+            </div>
+            <div class="form-group">
+              <label>Client Secret</label>
+              <input type="password" name="client_secret" value="{{ cfg.client_secret if cfg else '' }}">
+            </div>
+            <div class="form-group full">
+              <label>Tenant ID <small style="font-weight:400">(Azure AD / M365)</small></label>
+              <input type="text" name="tenant_id" value="{{ cfg.tenant_id if cfg else '' }}"
+                     placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARAMS EXTRA -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>⚙️ Parámetros extra</h2></div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
+          Parámetros adicionales que se agregarán como query string a la URL (ej: <code>$filter=accountEnabled eq true</code>)
+        </div>
+        <div id="extra-params">
+          {% if cfg and cfg.extra_params %}
+            {% set ep = cfg.extra_params|from_json %}
+            {% if ep and ep.query %}
+              {% for k,v in ep.query.items() %}
+              <div class="extra-row" style="display:flex;gap:8px;margin-bottom:6px">
+                <input type="text" name="extra_key" value="{{ k }}" placeholder="nombre del param" style="flex:1">
+                <input type="text" name="extra_val" value="{{ v }}" placeholder="valor" style="flex:2">
+                <button type="button" class="btn btn-sm" onclick="this.closest('.extra-row').remove()" style="color:var(--red)">✕</button>
+              </div>
+              {% endfor %}
+            {% endif %}
+          {% endif %}
+        </div>
+        <button type="button" class="btn btn-sm" onclick="addParam()">+ Agregar parámetro</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ COLUMNA DERECHA ════════════════════════════════════════════════════ -->
+  <div>
+
+    <!-- MAPEO DE CAMPOS -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🗺️ Mapeo de campos</h2></div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+          Indica qué campo del JSON de respuesta corresponde a cada dato del directorio.
+          Deja vacío para usar el valor por defecto del tipo de API.
+        </div>
+        {% set fmap_defaults = {
+          'office365': [('email','userPrincipalName'),('name','displayName'),('id','id'),('status','accountEnabled')],
+          'salesforce': [('email','Email'),('name','Name'),('id','Id'),('status','IsActive')],
+          'sap':        [('email','Email'),('name','FullName'),('id','UserName'),('status','Locked')],
+          'workday':    [('email','Email_Work'),('name','Preferred_Name'),('id','Employee_ID'),('status','Active')],
+          'custom':     [('email','email'),('name','name'),('id','id'),('status','status')],
+        } %}
+        {% set cur_fmap = {} %}
+        {% if cfg and cfg.field_map %}
+          {% set cur_fmap = cfg.field_map|from_json %}
+        {% endif %}
+        {% for campo, default in fmap_defaults.get(cfg.api_type if cfg else 'custom', fmap_defaults['custom']) %}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:500;width:60px;color:var(--text2)">{{ campo }}</span>
+          <span style="color:var(--text2)">→</span>
+          <input type="hidden" name="fmap_key" value="{{ campo }}">
+          <input type="text" name="fmap_val"
+                 value="{{ cur_fmap.get(campo, default) }}"
+                 placeholder="{{ default }}" style="flex:1;font-size:12px">
+        </div>
+        {% endfor %}
+        <div id="extra-fmap">
+          {% if cur_fmap %}
+          {% for k,v in cur_fmap.items() %}
+          {% if k not in ['email','name','id','status'] %}
+          <div class="fmap-row" style="display:flex;gap:8px;margin-bottom:6px">
+            <input type="text" name="fmap_key" value="{{ k }}" placeholder="campo destino" style="flex:1;font-size:12px">
+            <span style="color:var(--text2);align-self:center">→</span>
+            <input type="text" name="fmap_val" value="{{ v }}" placeholder="campo API" style="flex:2;font-size:12px">
+            <button type="button" class="btn btn-sm" onclick="this.closest('.fmap-row').remove()" style="color:var(--red)">✕</button>
+          </div>
+          {% endif %}
+          {% endfor %}
+          {% endif %}
+        </div>
+        <button type="button" class="btn btn-sm" onclick="addFmap()">+ Campo adicional</button>
+      </div>
+    </div>
+
+    <!-- BAJA REMOTA -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h2>🚪 Baja remota por API</h2>
+        <span class="badge {% if cfg and cfg.offboard_endpoint %}badge-active{% else %}badge-inactive{% endif %}">
+          {% if cfg and cfg.offboard_endpoint %}Configurada{% else %}Sin configurar{% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+          Cuando se inicia la baja de un usuario, UserSync puede llamar a este endpoint para deshabilitarlo directamente en {{ name }}.
+          Usa <code style="background:var(--gray-l);padding:1px 5px;border-radius:3px">{account_id}</code> como variable.
+        </div>
+        <div class="form-group">
+          <label>Endpoint de baja</label>
+          <input type="url" name="offboard_endpoint"
+                 value="{{ cfg.offboard_endpoint if cfg else '' }}"
+                 placeholder="https://api.ejemplo.com/v1/users/{account_id}/disable">
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Método HTTP</label>
+            <select name="offboard_method">
+              {% for m in ['PATCH','PUT','POST','DELETE'] %}
+              <option value="{{ m }}" {% if cfg and cfg.offboard_method==m %}selected{% endif %}>{{ m }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Payload JSON</label>
+            <input type="text" name="offboard_payload"
+                   value="{{ cfg.offboard_payload if cfg else '' }}"
+                   placeholder='{"accountEnabled": false}'>
+          </div>
+        </div>
+        <!-- Ejemplos por tipo -->
+        <div style="background:var(--gray-l);border-radius:var(--radius);padding:10px;font-size:11px;color:var(--text2)">
+          <strong>Ejemplos rápidos:</strong><br>
+          <span style="cursor:pointer;color:var(--blue)" onclick="setOffboard('https://graph.microsoft.com/v1.0/users/{account_id}','PATCH',\'{&quot;accountEnabled&quot;: false}\')">M365</span> ·
+          <span style="cursor:pointer;color:var(--blue)" onclick="setOffboard('https://tu-instancia.salesforce.com/services/data/v57.0/sobjects/User/{account_id}','PATCH',\'{&quot;IsActive&quot;: false}\')">Salesforce</span> ·
+          <span style="cursor:pointer;color:var(--blue)" onclick="setOffboard('https://api.ejemplo.com/users/{account_id}/deactivate','POST',\'{}\')">Genérico</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SYNC AUTOMÁTICA -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h2>🕐 Sincronización automática</h2></div>
+      <div class="card-body">
+        <label class="plat-check {% if cfg and cfg.sync_enabled %}checked{% endif %}"
+               id="lbl-sync" style="margin-bottom:14px">
+          <input type="checkbox" name="sync_enabled" value="1" id="sync-toggle"
+                 {% if cfg and cfg.sync_enabled %}checked{% endif %}
+                 onchange="document.getElementById('lbl-sync').classList.toggle('checked',this.checked);
+                           document.getElementById('sync-interval-wrap').style.display=this.checked?'':'none'">
+          <div>
+            <div style="font-weight:500">Sincronización periódica activada</div>
+            <div style="font-size:11px;color:var(--text2)">El sistema actualizará automáticamente los accesos según el intervalo definido</div>
+          </div>
+        </label>
+        <div id="sync-interval-wrap" style="{% if not cfg or not cfg.sync_enabled %}display:none{% endif %}">
+          <div class="form-group">
+            <label>Intervalo de sincronización</label>
+            <select name="sync_interval">
+              {% for h,l in [(1,'Cada hora'),(6,'Cada 6 horas'),(12,'Cada 12 horas'),(24,'Diaria'),(48,'Cada 2 días'),(168,'Semanal')] %}
+              <option value="{{ h }}" {% if cfg and cfg.sync_interval==h %}selected{% elif h==24 and not cfg %}selected{% endif %}>{{ l }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% if cfg and cfg.last_sync %}
+          <div style="font-size:12px;color:var(--text2)">
+            🕐 Última sync: {{ cfg.last_sync[:16] }}
+            {% if cfg.last_sync_status=='ok' %}<span style="color:var(--green)">✓ OK</span>
+            {% elif cfg.last_sync_status=='error' %}<span style="color:var(--red)">✗ Error</span>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- grid -->
+
+<!-- BOTONES GUARDAR -->
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+  <a href="/plataformas" class="btn">Cancelar</a>
+  <button type="submit" class="btn btn-primary" style="background:{{ color }};border-color:{{ color }}">
+    💾 Guardar configuración API
+  </button>
+</div>
+</form>
+
+<!-- LOG DE SINCRONIZACIONES -->
+{% if logs %}
+<div class="card" style="margin-top:24px">
+  <div class="card-header"><h2>📋 Historial de sincronizaciones</h2></div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Fecha</th><th>Trigger</th><th>Estado</th><th>Total</th><th>Cruzados</th><th>Sin cruce</th><th>Detalle</th></tr></thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td style="font-size:12px;white-space:nowrap">{{ l.created_at[:16] }}</td>
+          <td>
+            {% if l.trigger=='forzado' %}<span class="badge badge-pending">⚡ Forzado</span>
+            {% elif l.trigger=='automatico' %}<span class="badge badge-active">🕐 Automático</span>
+            {% elif l.trigger=='offboard' %}<span class="badge badge-offboarding">🚪 Baja</span>
+            {% else %}<span class="badge badge-inactive">Manual</span>{% endif %}
+          </td>
+          <td>
+            {% if l.status=='ok' %}<span class="badge badge-active">✓ OK</span>
+            {% else %}<span class="badge badge-offboarding">✗ Error</span>{% endif %}
+          </td>
+          <td style="text-align:center">{{ l.records_total or '—' }}</td>
+          <td style="text-align:center;color:var(--green)"><strong>{{ l.records_matched or '—' }}</strong></td>
+          <td style="text-align:center;color:var(--red)">{{ l.records_new or '—' }}</td>
+          <td class="text-muted" style="font-size:11px;max-width:260px">{{ l.detail or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% block scripts %}
+<script>
+const API_TEMPLATES = {
+  office365: {
+    url:  "https://graph.microsoft.com/v1.0/users?$select=id,displayName,userPrincipalName,accountEnabled&$top=999",
+    hint: "Microsoft Graph API — requiere OAuth2 Client Credentials con permiso User.Read.All",
+    auth: "oauth2_cc"
+  },
+  salesforce: {
+    url:  "https://tu-instancia.salesforce.com/services/data/v57.0/query?q=SELECT+Id,Name,Email,IsActive+FROM+User",
+    hint: "Salesforce REST API — usa Connected App con OAuth2 o Session ID",
+    auth: "bearer"
+  },
+  sap: {
+    url:  "https://tu-sap.empresa.com:50000/sap/opu/odata/sap/ZUS_USERS/UserSet",
+    hint: "SAP OData service — requiere usuario/contraseña de sistema o Bearer token",
+    auth: "basic"
+  },
+  workday: {
+    url:  "https://wd2-impl-services1.workday.com/ccx/api/v1/tenant/workers",
+    hint: "Workday REST API — requiere OAuth2 con Integration System User",
+    auth: "oauth2_cc"
+  },
+  custom: {
+    url:  "",
+    hint: "Endpoint REST que retorne un array JSON de usuarios (o un objeto con propiedad 'data', 'users', 'items', etc.)",
+    auth: "bearer"
+  }
+};
+
+function updateTemplate(type) {
+  const tpl = API_TEMPLATES[type] || API_TEMPLATES.custom;
+  const urlEl = document.getElementById('base_url');
+  const hint  = document.getElementById('url-hint');
+  if (!urlEl.value) urlEl.value = tpl.url;
+  if (hint) hint.textContent = tpl.hint;
+  showAuth(tpl.auth);
+  document.getElementById('auth_type').value = tpl.auth;
+}
+
+function showAuth(type) {
+  document.getElementById('auth-token').style.display  = ['bearer','apikey'].includes(type) ? '' : 'none';
+  document.getElementById('auth-basic').style.display  = type === 'basic'     ? '' : 'none';
+  document.getElementById('auth-oauth2').style.display = type === 'oauth2_cc' ? '' : 'none';
+  document.getElementById('token-label').textContent   = type === 'apikey' ? 'API Key' : 'Bearer Token';
+}
+
+function addParam() {
+  const d = document.createElement('div');
+  d.className = 'extra-row';
+  d.style = 'display:flex;gap:8px;margin-bottom:6px';
+  d.innerHTML = `<input type="text" name="extra_key" placeholder="nombre del param" style="flex:1">
+    <input type="text" name="extra_val" placeholder="valor" style="flex:2">
+    <button type="button" class="btn btn-sm" onclick="this.closest('.extra-row').remove()" style="color:var(--red)">✕</button>`;
+  document.getElementById('extra-params').appendChild(d);
+}
+
+function addFmap() {
+  const d = document.createElement('div');
+  d.className = 'fmap-row';
+  d.style = 'display:flex;gap:8px;margin-bottom:6px';
+  d.innerHTML = `<input type="text" name="fmap_key" placeholder="campo destino" style="flex:1;font-size:12px">
+    <span style="color:var(--text2);align-self:center">→</span>
+    <input type="text" name="fmap_val" placeholder="campo en JSON" style="flex:2;font-size:12px">
+    <button type="button" class="btn btn-sm" onclick="this.closest('.fmap-row').remove()" style="color:var(--red)">✕</button>`;
+  document.getElementById('extra-fmap').appendChild(d);
+}
+
+function setOffboard(url, method, payload) {
+  document.querySelector('[name=offboard_endpoint]').value = url;
+  document.querySelector('[name=offboard_method]').value   = method;
+  document.querySelector('[name=offboard_payload]').value  = payload.replace(/&quot;/g,'"');
+}
+
+function testConnection() {
+  const btn    = document.getElementById('btn-test');
+  const banner = document.getElementById('test-banner');
+  btn.disabled = true;
+  btn.textContent = '⏳ Probando...';
+  banner.style.display = 'none';
+  fetch('/plataformas/{{ name }}/api/test', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      banner.style.display = '';
+      banner.innerHTML = `<div class="alert-msg ${d.ok?'success':'danger'}">${d.ok?'✓':'✗'} ${d.msg}</div>`;
+      btn.disabled = false;
+      btn.textContent = '🔌 Probar conexión';
+    }).catch(e=>{
+      banner.style.display = '';
+      banner.innerHTML = `<div class="alert-msg danger">✗ Error de red: ${e}</div>`;
+      btn.disabled = false;
+      btn.textContent = '🔌 Probar conexión';
+    });
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', () => {
+  showAuth(document.getElementById('auth_type').value);
+  // Register from_json filter — not needed in JS but check display
+  const syncToggle = document.getElementById('sync-toggle');
+  if (syncToggle) {
+    document.getElementById('sync-interval-wrap').style.display = syncToggle.checked ? '' : 'none';
+  }
+});
+</script>
+{% endblock %}
+{% endblock %}

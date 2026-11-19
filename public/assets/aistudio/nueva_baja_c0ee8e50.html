@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Nueva desvinculación{% endblock %}
+{% block page_title %}Iniciar proceso de desvinculación{% endblock %}
+{% block content %}
+
+<div style="max-width:680px">
+  <div class="card">
+    <div class="card-header"><h2>🔍 Paso 1 — Buscar usuario</h2></div>
+    <div class="card-body">
+      <form method="get" style="display:flex;gap:10px">
+        <input type="text" name="q" value="{{ q }}" placeholder="Nombre, email o RUT del usuario..."
+               style="flex:1" autofocus>
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        {% if q %}<a href="/bajas/nueva" class="btn">Limpiar</a>{% endif %}
+      </form>
+
+      {% if q and not usuarios %}
+      <div style="margin-top:16px;padding:16px;background:var(--amber-l);border-radius:var(--radius);font-size:13px;color:#5c3d00">
+        ⚠️ No se encontraron usuarios activos con "<strong>{{ q }}</strong>".
+        Solo se pueden desvincular usuarios con estado <strong>Activo</strong> o <strong>Pendiente</strong>.
+      </div>
+      {% endif %}
+
+      {% if usuarios %}
+      <div style="margin-top:16px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">{{ usuarios|length }} resultado(s) — haz clic en el usuario para continuar:</div>
+        {% for u in usuarios %}
+        <div class="plat-row" style="padding:12px 14px;cursor:pointer;margin-bottom:6px"
+             onclick="seleccionarUsuario({{ u.id }}, '{{ u.full_name }}', '{{ u.email }}', '{{ u.department or '' }}', '{{ u.position or '' }}')">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="user-avatar" style="width:36px;height:36px;font-size:13px">{{ u.full_name[:2].upper() }}</div>
+            <div>
+              <div style="font-weight:500;font-size:13px">{{ u.full_name }}</div>
+              <div style="font-size:11px;color:var(--text2)">{{ u.email }} {% if u.department %}· {{ u.department }}{% endif %} {% if u.position %}· {{ u.position }}{% endif %}</div>
+            </div>
+          </div>
+          <span class="badge badge-active">Activo</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- FORMULARIO BAJA (oculto hasta seleccionar usuario) -->
+  <div class="card" id="form-baja" style="margin-top:16px;display:none">
+    <div class="card-header">
+      <h2>📋 Paso 2 — Datos de la desvinculación</h2>
+    </div>
+    <div class="card-body">
+      <!-- Preview usuario seleccionado -->
+      <div id="usuario-preview" style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--blue-l);border-radius:var(--radius);margin-bottom:20px">
+        <div class="user-avatar" id="prev-avatar" style="width:40px;height:40px;font-size:14px"></div>
+        <div>
+          <div style="font-weight:600" id="prev-nombre"></div>
+          <div style="font-size:12px;color:var(--text2)" id="prev-info"></div>
+        </div>
+        <button type="button" class="btn btn-sm" style="margin-left:auto" onclick="limpiarSeleccion()">Cambiar</button>
+      </div>
+
+      <form method="post" action="/bajas/nueva">
+        <input type="hidden" name="user_id" id="user_id_hidden">
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Motivo de la desvinculación *</label>
+            <select name="reason" required>
+              <option value="">Seleccionar motivo…</option>
+              {% for r in reasons %}
+              <option value="{{ r }}">{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Fecha efectiva de baja *</label>
+            <input type="date" name="leave_date" required
+                   value="{{ '' }}" id="fecha-baja">
+          </div>
+          <div class="form-group full">
+            <label>Notas adicionales</label>
+            <textarea name="notes" placeholder="Ej: Entregar equipos el último día, traspasar proyectos a Juan..."></textarea>
+          </div>
+        </div>
+
+        <div style="background:var(--amber-l);border-radius:var(--radius);padding:12px;font-size:13px;color:#5c3d00;margin-bottom:20px">
+          ⚠️ Al confirmar, el usuario pasará a estado <strong>"En proceso de baja"</strong>.
+          Podrás revocar sus accesos en plataformas desde la sección <strong>Bajas y desvinculaciones</strong>.
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <a href="/bajas" class="btn">Cancelar</a>
+          <button type="submit" class="btn btn-danger">
+            🚪 Confirmar desvinculación
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+// Poner fecha de hoy por defecto
+document.getElementById('fecha-baja').value = new Date().toISOString().split('T')[0];
+
+function seleccionarUsuario(id, nombre, email, dept, cargo) {
+  document.getElementById('user_id_hidden').value = id;
+  document.getElementById('prev-avatar').textContent = nombre.substring(0,2).toUpperCase();
+  document.getElementById('prev-nombre').textContent = nombre;
+  document.getElementById('prev-info').textContent = [email, dept, cargo].filter(Boolean).join(' · ');
+  document.getElementById('form-baja').style.display = 'block';
+  document.getElementById('form-baja').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function limpiarSeleccion() {
+  document.getElementById('user_id_hidden').value = '';
+  document.getElementById('form-baja').style.display = 'none';
+}
+</script>
+{% endblock %}
+{% endblock %}

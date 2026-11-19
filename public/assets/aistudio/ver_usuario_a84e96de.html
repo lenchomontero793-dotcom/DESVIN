@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}{{ u.full_name }}{% endblock %}
+{% block page_title %}Detalle de usuario{% endblock %}
+{% block topbar_actions %}
+<a href="/usuarios/{{ u.id }}/editar" class="btn">✏️ Editar</a>
+{% if u.status not in ['En proceso de baja','Inactivo'] %}
+<button class="btn btn-danger" onclick="document.getElementById('modal-baja').classList.add('open')">🚪 Iniciar baja</button>
+{% endif %}
+{% endblock %}
+{% block content %}
+
+<!-- HEADER USUARIO -->
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)">
+  <div class="user-avatar">{{ u.full_name[:2].upper() }}</div>
+  <div style="flex:1">
+    <h2 style="font-size:18px;font-weight:600">{{ u.full_name }}</h2>
+    <div style="font-size:13px;color:var(--text2)">{{ u.position or '' }}{% if u.department %} · {{ u.department }}{% endif %}</div>
+    <div style="font-size:13px;color:var(--text2)">{{ u.email }}</div>
+  </div>
+  {% if u.status=='Activo' %}<span class="badge badge-active" style="font-size:13px;padding:6px 14px">● Activo</span>
+  {% elif u.status=='Inactivo' %}<span class="badge badge-inactive" style="font-size:13px;padding:6px 14px">● Inactivo</span>
+  {% elif u.status=='En proceso de baja' %}<span class="badge badge-offboarding" style="font-size:13px;padding:6px 14px">● En proceso de baja</span>
+  {% else %}<span class="badge badge-pending" style="font-size:13px;padding:6px 14px">● {{ u.status }}</span>{% endif %}
+</div>
+
+<!-- ALERTA BAJA ACTIVA -->
+{% if ob and ob.status=='En proceso' %}
+<div class="alerts danger" style="margin-bottom:16px">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <div>
+    <strong>Baja en proceso</strong> — Motivo: {{ ob.reason }}. Fecha: {{ ob.leave_date }}.
+    {% if active_plats %}<br>Accesos aún activos: <strong>{{ active_plats|join(', ') }}</strong>{% endif %}
+  </div>
+  {% if active_plats %}
+  <form method="post" action="/usuarios/{{ u.id }}/revocar_todo" style="margin-left:auto;flex-shrink:0">
+    <button type="submit" class="btn btn-danger btn-sm"
+            onclick="return confirm('¿Revocar todos los accesos y marcar como Inactivo?')">
+      Revocar todo
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- INFO + PLATAFORMAS -->
+<div class="detail-grid">
+  <div class="detail-box">
+    <h3>Información personal</h3>
+    <div class="detail-row"><span>RUT</span><span>{{ u.rut or '—' }}</span></div>
+    <div class="detail-row"><span>Email</span><span>{{ u.email }}</span></div>
+    <div class="detail-row"><span>Teléfono</span><span>{{ u.phone or '—' }}</span></div>
+    <div class="detail-row"><span>Departamento</span><span>{{ u.department or '—' }}</span></div>
+    <div class="detail-row"><span>Cargo</span><span>{{ u.position or '—' }}</span></div>
+    <div class="detail-row"><span>Jefatura</span><span>{{ u.manager or '—' }}</span></div>
+    <div class="detail-row"><span>Fecha contrato</span><span>{{ u.hire_date or '—' }}</span></div>
+    <div class="detail-row"><span>Creado</span><span>{{ u.created_at }}</span></div>
+    {% if u.notes %}<div class="detail-row"><span>Notas</span><span>{{ u.notes }}</span></div>{% endif %}
+  </div>
+
+  <div class="detail-box">
+    <h3>Accesos por plataforma</h3>
+    {% for p in all_platforms %}
+    {% set is_active = p in active_plats %}
+    {% set has_api   = p in api_plats %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:8px 10px;border-radius:6px;margin-bottom:4px;font-size:12px;
+                background:#fff;border:1px solid var(--border)">
+      <span style="font-weight:500">{{ p }}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        {% if is_active %}
+          <span style="color:var(--green);font-size:12px;font-weight:500">✓ Activo</span>
+          {% if has_api %}
+          <form method="post" action="/plataformas/{{ p }}/api/offboard/{{ u.id }}"
+                onsubmit="return confirm('¿Dar de baja a {{ u.full_name }} en {{ p }} vía API?')">
+            <button type="submit" class="btn btn-sm"
+                    style="font-size:10px;padding:2px 8px;color:var(--red);border-color:var(--red)">
+              🔌 Baja API
+            </button>
+          </form>
+          {% endif %}
+        {% else %}
+          <span style="color:var(--text2);font-size:12px">— Sin acceso</span>
+        {% endif %}
+        {% if has_api %}
+          <span title="API configurada" style="font-size:10px;background:var(--blue-l);color:var(--blue);padding:1px 5px;border-radius:4px">API</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- HISTORIAL -->
+<div class="card mt-4">
+  <div class="card-header"><h2>📋 Historial de cambios</h2></div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Acción</th><th>Detalle</th><th>Realizado por</th><th>Fecha</th></tr></thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td><strong>{{ l.action }}</strong></td>
+          <td class="text-muted" style="font-size:12px">{{ l.detail or '—' }}</td>
+          <td style="font-size:12px">{{ l.performed_by }}</td>
+          <td class="text-muted" style="font-size:12px">{{ l.created_at }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text2)">Sin registros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MODAL BAJA -->
+<div class="modal-overlay" id="modal-baja">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🚪 Iniciar proceso de baja</h2>
+      <button class="btn btn-icon" onclick="document.getElementById('modal-baja').classList.remove('open')">✕</button>
+    </div>
+    <form method="post" action="/usuarios/{{ u.id }}/baja">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Motivo *</label>
+          <select name="reason" required>
+            <option value="">Seleccionar…</option>
+            <option>Renuncia voluntaria</option><option>Término de contrato</option>
+            <option>Despido</option><option>Jubilación</option>
+            <option>Traslado</option><option>Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fecha efectiva *</label>
+          <input type="date" name="leave_date" required>
+        </div>
+        <div class="form-group">
+          <label>Notas</label>
+          <textarea name="notes" placeholder="Información adicional…"></textarea>
+        </div>
+        <div style="background:var(--amber-l);border-radius:var(--radius);padding:12px;font-size:13px;color:#5c3d00">
+          ⚠️ Se notificará para revocar accesos en todas las plataformas.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('modal-baja').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-danger">Confirmar baja</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

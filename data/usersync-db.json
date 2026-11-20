@@ -808,6 +808,13 @@
   ],
   "auditLogs": [
     {
+      "id": "log-1795177385171-kn71",
+      "action": "auth_login",
+      "text": "Inicio de sesión operador (admin · Superadmin)",
+      "actor": "admin@empresa.com",
+      "timestamp": "2026-11-20T12:23:05.171Z"
+    },
+    {
       "id": "log-1795122622608-sjts",
       "action": "auth_login",
       "text": "Inicio de sesión operador (admin · Superadmin)",
@@ -969,7 +976,7 @@
       "roleId": "role-superadmin",
       "active": true,
       "mustChangePw": false,
-      "lastLogin": "2026-11-19T21:10:22.608Z",
+      "lastLogin": "2026-11-20T12:23:05.170Z",
       "createdAt": "2026-11-16T21:10:21.318Z"
     }
   ],
@@ -997,6 +1004,12 @@
       "userId": "su-admin",
       "kind": "sys",
       "createdAt": "2026-11-19T21:10:22.608Z"
+    },
+    {
+      "token": "3714b6e6e351bff7e9f4fd1644360b70e28c19ea3808b59029b192f65161627c",
+      "userId": "su-admin",
+      "kind": "sys",
+      "createdAt": "2026-11-20T12:23:05.170Z"
     }
   ]
 }

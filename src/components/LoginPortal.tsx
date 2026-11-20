@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { AuthSession } from '../types';
+import { apiFetch } from '../utils/apiClient';
 
 interface LoginPortalProps {
   onLoginSuccess: (session: AuthSession) => void;
@@ -26,7 +27,7 @@ export function LoginPortal({ onLoginSuccess }: LoginPortalProps) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),

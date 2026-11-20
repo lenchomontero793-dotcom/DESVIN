@@ -11,6 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { AiProposalCard, AppStateResponse } from '../types';
+import { apiFetch } from '../utils/apiClient';
 import { formatRelativeTime } from '../utils/formatters';
 
 interface AssistantViewProps {
@@ -48,7 +49,7 @@ export function AssistantView({
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await fetch('/api/assistant/history', {
+      const res = await apiFetch('/api/assistant/history', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
@@ -74,7 +75,7 @@ export function AssistantView({
     setSending(true);
 
     try {
-      const res = await fetch('/api/assistant/message', {
+      const res = await apiFetch('/api/assistant/message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -128,7 +129,7 @@ export function AssistantView({
   const handleApplyProposal = async (proposalId: string) => {
     setBusyProposalId(proposalId);
     try {
-      const res = await fetch(`/api/assistant/proposals/${encodeURIComponent(proposalId)}/apply`, {
+      const res = await apiFetch(`/api/assistant/proposals/${encodeURIComponent(proposalId)}/apply`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -151,7 +152,7 @@ export function AssistantView({
   const handleDiscardProposal = async (proposalId: string) => {
     setBusyProposalId(proposalId);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/assistant/proposals/${encodeURIComponent(proposalId)}/discard`,
         {
           method: 'POST',
@@ -174,7 +175,7 @@ export function AssistantView({
   const handleUndoProposal = async (proposalId: string) => {
     setBusyProposalId(proposalId);
     try {
-      const res = await fetch(`/api/assistant/proposals/${encodeURIComponent(proposalId)}/undo`, {
+      const res = await apiFetch(`/api/assistant/proposals/${encodeURIComponent(proposalId)}/undo`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });

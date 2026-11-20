@@ -30,6 +30,7 @@ import type {
   SysUser,
   SystemSettings,
 } from '../types';
+import { apiFetch } from '../utils/apiClient';
 import { formatRelativeTime, formatUptime } from '../utils/formatters';
 import { PERMS_CATALOG, hasPerm } from '../utils/rbac';
 import { ConfirmModal } from './Modals';
@@ -262,7 +263,7 @@ export function AdminConfigView({
   const handleCreateBackup = async () => {
     setCreatingBackup(true);
     try {
-      const res = await fetch('/api/backups', {
+      const res = await apiFetch('/api/backups', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -287,7 +288,7 @@ export function AdminConfigView({
 
   const handleDownloadBackup = async (name: string) => {
     try {
-      const res = await fetch(`/api/backups/${encodeURIComponent(name)}/download`, {
+      const res = await apiFetch(`/api/backups/${encodeURIComponent(name)}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -313,7 +314,7 @@ export function AdminConfigView({
     if (!restoreTarget) return;
     setRestoring(true);
     try {
-      const res = await fetch(`/api/backups/${encodeURIComponent(restoreTarget.name)}/restore`, {
+      const res = await apiFetch(`/api/backups/${encodeURIComponent(restoreTarget.name)}/restore`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

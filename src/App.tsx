@@ -57,6 +57,7 @@ import type {
   PortalRole,
   User,
 } from './types';
+import { apiFetch } from './utils/apiClient';
 import { downloadCsv, parseCsvText } from './utils/formatters';
 import {
   getAllowedPages,
@@ -138,7 +139,7 @@ export default function App() {
       return;
     }
 
-    fetch('/api/auth/me', {
+    apiFetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then(async (res) => {
@@ -162,7 +163,7 @@ export default function App() {
     async (token: string) => {
       setLoading(true);
       try {
-        const res = await fetch('/api/state', {
+        const res = await apiFetch('/api/state', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 401 || res.status === 403) {
@@ -201,7 +202,7 @@ export default function App() {
   const handleLogout = async () => {
     if (session?.token) {
       try {
-        await fetch('/api/auth/logout', {
+        await apiFetch('/api/auth/logout', {
           method: 'POST',
           headers: { Authorization: `Bearer ${session.token}` },
         });
@@ -218,7 +219,7 @@ export default function App() {
   ): Promise<string | null> => {
     if (!session?.token) return 'Sesión no válida.';
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await apiFetch('/api/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -246,7 +247,7 @@ export default function App() {
   ): Promise<boolean> => {
     if (!session?.token) return false;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -295,7 +296,7 @@ export default function App() {
   ): Promise<boolean> => {
     if (!session?.token) return false;
     try {
-      const res = await fetch('/api/users/bulk-import', {
+      const res = await apiFetch('/api/users/bulk-import', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -336,7 +337,7 @@ export default function App() {
   const handleApiOffboard = async (platformId: string, userId: string) => {
     if (!session?.token) return;
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/platforms/${encodeURIComponent(platformId)}/api/offboard/${encodeURIComponent(userId)}`,
         {
           method: 'POST',
@@ -440,7 +441,7 @@ export default function App() {
   ): Promise<{ total: number; matched: number; unmatched: number } | null> => {
     if (!session?.token) return null;
     try {
-      const res = await fetch(`/api/platforms/${encodeURIComponent(platformId)}/imports`, {
+      const res = await apiFetch(`/api/platforms/${encodeURIComponent(platformId)}/imports`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -489,7 +490,7 @@ export default function App() {
   const handleTestApiConnection = async (platformId: string) => {
     if (!session?.token) return { ok: false, count: 0, msg: 'Sesión no válida.' };
     try {
-      const res = await fetch(`/api/platforms/${encodeURIComponent(platformId)}/api/test`, {
+      const res = await apiFetch(`/api/platforms/${encodeURIComponent(platformId)}/api/test`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.token}` },
       });
@@ -502,7 +503,7 @@ export default function App() {
   const handleForceApiSync = async (platformId: string) => {
     if (!session?.token) return { ok: false, msg: 'Sesión no válida.' };
     try {
-      const res = await fetch(`/api/platforms/${encodeURIComponent(platformId)}/api/sync`, {
+      const res = await apiFetch(`/api/platforms/${encodeURIComponent(platformId)}/api/sync`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.token}` },
       });
@@ -526,7 +527,7 @@ export default function App() {
     if (!session?.token) return null;
     const rows = parseCsvText(rawText);
     try {
-      const res = await fetch('/api/consolidate/preview', {
+      const res = await apiFetch('/api/consolidate/preview', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
